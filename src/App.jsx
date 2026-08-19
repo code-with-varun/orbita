@@ -15,6 +15,7 @@ import TaskFormModal from './components/TaskFormModal';
 import TaskDetailModal from './components/TaskDetailModal';
 import AuthModal from './components/AuthModal';
 import ToastNotification from './components/ToastNotification';
+import LandingPage from './components/LandingPage';
 
 export default function App() {
   const [activeView, setActiveView] = useState('dashboard');
@@ -37,6 +38,7 @@ export default function App() {
   // Modals
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [authInitialRegister, setAuthInitialRegister] = useState(false);
   const [selectedTaskId, setSelectedTaskId] = useState(null);
   const [defaultScheduledDate, setDefaultScheduledDate] = useState('');
 
@@ -255,16 +257,33 @@ export default function App() {
     setIsTaskModalOpen(true);
   };
 
-  // If user is not authenticated, render Welcome / Register screen
+  // If user is not authenticated, render the Landing Page as the Home Page
   if (!currentUser) {
     return (
-      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1.5rem' }}>
+      <div className="landing-root">
+        <LandingPage
+          theme={theme}
+          onToggleTheme={toggleTheme}
+          onOpenAuth={(isRegister) => {
+            setAuthInitialRegister(Boolean(isRegister));
+            setIsAuthModalOpen(true);
+          }}
+          onExploreApp={() => {
+            setAuthInitialRegister(false);
+            setIsAuthModalOpen(true);
+          }}
+        />
+
         <AuthModal
-          isOpen={true}
-          onClose={null}
+          isOpen={isAuthModalOpen}
+          initialIsRegister={authInitialRegister}
+          onClose={() => setIsAuthModalOpen(false)}
           onLoginSuccess={handleLoginSuccess}
         />
-        <ToastNotification toast={toast} onClose={() => setToast(null)} />
+
+        {toast && (
+          <ToastNotification toast={toast} onClose={() => setToast(null)} />
+        )}
       </div>
     );
   }

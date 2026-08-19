@@ -893,4 +893,22 @@ body {
   border: 2px dashed var(--accent-blue) !important;
 }
 
+/* =============================================================
+   LANDING PAGE STYLES
+   ============================================================= */
+.landing-container {
+  scroll-behavior: smooth;
+}
+
+.landing-nav-links a:hover {
+  color: var(--accent-blue) !important;
+}
+
+@media (max-width: 768px) {
+  .landing-nav-links {
+    display: none !important;
+  }
+}
+
+
 

@@ -1,14 +1,19 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { LogIn, UserPlus, Orbit, ShieldCheck } from 'lucide-react';
 
-export default function AuthModal({ isOpen, onClose, onLoginSuccess }) {
-  const [isRegister, setIsRegister] = useState(true);
+export default function AuthModal({ isOpen, initialIsRegister = false, onClose, onLoginSuccess }) {
+  const [isRegister, setIsRegister] = useState(initialIsRegister);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [role, setRole] = useState('Member');
   const [errorMsg, setErrorMsg] = useState('');
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    setIsRegister(initialIsRegister);
+    setErrorMsg('');
+  }, [initialIsRegister, isOpen]);
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -56,18 +61,20 @@ export default function AuthModal({ isOpen, onClose, onLoginSuccess }) {
         <div style={{ textAlign: 'center', marginBottom: '1.75rem' }}>
           <div
             style={{
-              width: '52px',
-              height: '52px',
-              borderRadius: 'var(--radius-md)',
-              background: 'linear-gradient(135deg, var(--accent-blue), var(--accent-purple))',
+              width: '64px',
+              height: '64px',
+              borderRadius: '16px',
+              overflow: 'hidden',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               margin: '0 auto 0.85rem',
-              boxShadow: '0 0 20px rgba(59, 130, 246, 0.4)'
+              boxShadow: '0 0 25px rgba(59, 130, 246, 0.35)',
+              border: '1px solid var(--border-color)',
+              background: 'rgba(255, 255, 255, 0.05)'
             }}
           >
-            <Orbit size={30} color="#ffffff" />
+            <img src="/logo.png" alt="Orbita Logo" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
           </div>
           <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '1.6rem', fontWeight: '800', color: 'var(--text-main)' }}>
             {isRegister ? 'Get Started with Orbita' : 'Welcome Back'}

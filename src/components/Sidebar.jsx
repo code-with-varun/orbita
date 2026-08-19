@@ -53,12 +53,12 @@ export default function Sidebar({ activeView, setActiveView, stats }) {
 
   return (
     <aside className="sidebar">
-      <div className="brand">
-        <div className="brand-icon">
-          <Orbit size={24} color="#ffffff" />
+      <div className="brand" style={{ cursor: 'pointer' }} onClick={() => setActiveView('dashboard')}>
+        <div style={{ width: '36px', height: '36px', borderRadius: '10px', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(255, 255, 255, 0.05)', border: '1px solid var(--border-color)' }}>
+          <img src="/logo.png" alt="Orbita Logo" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
         </div>
         <div>
-          <h2 className="brand-title">ORBITA</h2>
+          <h2 className="brand-title" style={{ letterSpacing: '0.05em' }}>ORBITA</h2>
           <p style={{ fontSize: '0.68rem', color: 'var(--text-dim)', letterSpacing: '0.04em' }}>Work Management OS</p>
         </div>
       </div>
