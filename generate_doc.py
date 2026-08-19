@@ -28,19 +28,19 @@ h1_style.font.color.rgb = RGBColor(59, 130, 246)
 p = doc.add_paragraph('Orbita Work Management System', style='Title')
 p.alignment = WD_ALIGN_PARAGRAPH.LEFT
 
-p_sub = doc.add_paragraph('4 Simplified Core Types Architecture & QA Verification Report')
+p_sub = doc.add_paragraph('MERN Stack Architecture & QA Verification Report')
 p_sub.runs[0].font.size = Pt(14)
 p_sub.runs[0].font.color.rgb = RGBColor(100, 116, 139)
 
 doc.add_heading('1. Executive Architecture Summary', level=1)
 doc.add_paragraph(
-    'In strict alignment with the Simplifications sheet in the Orbita Project BRD, the entire system '
-    'has been streamlined into 4 core types: Task, Routine, Goal, and Project. Each type operates with '
-    'Personal and Work workspaces, automatic Eisenhower Priority Quadrant assignment (Q1 to Q4), '
-    'and dedicated life cycle execution rules.'
+    'Orbita is a modern MERN stack work management platform powered by MongoDB Atlas, Express, React (Vite), '
+    'and Node.js. It operates with a streamlined 4-type universal architecture: Tasks, Routines, Goals, and Projects, '
+    'featuring stage-task level focus timers, live real-time stopwatches, Eisenhower Matrix integration, '
+    'one-click CSV/JSON data dump exports, and Git version control.'
 )
 
-doc.add_heading('2. The 4 Simplified Orbita Types', level=1)
+doc.add_heading('2. The 4 Core Orbita Types', level=1)
 
 table_m = doc.add_table(rows=1, cols=6)
 table_m.alignment = WD_TABLE_ALIGNMENT.CENTER
@@ -54,7 +54,7 @@ matrix_items = [
     ('TASK', 'No', 'Personal / Work', 'One-time completion single occurrence, simple completion', 'Create -> Complete', 'Buy groceries, post a photo, search document'),
     ('ROUTINE', 'No', 'Personal / Work', 'Automatic recurrence, repeats automatically', 'Repeat -> Complete Occurrence', 'Weekly meeting, EB bill, nth day of month/week'),
     ('GOAL', 'Yes', 'Personal / Work', 'Time-tracked ongoing effort, multiple focus timer sessions, flat structure', 'Create -> Start Timer -> Stop/Pause -> Complete', 'Learning JavaScript, YouTube content creation, cooking, personal accounting'),
-    ('PROJECT', 'Yes', 'Personal / Work', 'Structured multistep delivery, needs stage -> task hierarchy', 'Stage -> Task -> Complete Project (all tasks must finish)', 'Building CRM app, MERN project, Website development')
+    ('PROJECT', 'Yes (Task-Level)', 'Personal / Work', 'Structured multistep delivery, needs stage -> task hierarchy', 'Stage -> Task -> Complete Project (all tasks must finish)', 'Building CRM app, MERN project, Website development')
 ]
 
 for row in matrix_items:
@@ -73,14 +73,13 @@ for i, h in enumerate(headers):
     hdr_cells[i].paragraphs[0].runs[0].font.bold = True
 
 items = [
-    ('4 Core Orbita Types', 'Tasks, Routines, Goals, Projects Architecture', 'PASSED', 'Recreated schema and UI for the 4 pure types'),
-    ('Workspace Division', 'Personal vs Work 2-Way Filtering', 'PASSED', 'Seamless toggle between Personal, Work, and All items'),
-    ('Project Hierarchy', 'Stage -> Task Multistep Delivery', 'PASSED', 'Stage-tasks progress bars; project auto-completes only when all tasks are done'),
-    ('Goal Focus Tracking', 'Live Stopwatch Timer & Hours Target', 'PASSED', 'Live real-time ticking stopwatch badge, effort target progress, and timesheets'),
-    ('Routine Recurrence', 'Automated Recurrence Patterns', 'PASSED', 'Daily, Weekly, Monthly, and Yearly recurrence schedules'),
-    ('Clean State Reset', 'Wipe Database to 0 Users / 0 Items', 'PASSED', 'Pure blank slate ready for fresh user registration and login'),
-    ('Eisenhower Matrix', '2x2 Decision Grid (Q1 to Q4)', 'PASSED', 'Automatic assignment into Q1: Do Now, Q2: Plan, Q3: Quick Action, Q4: Optional'),
-    ('Monthly Highlights', 'Scorecard & Starred Milestones', 'PASSED', 'Monthly productivity recognition, achievement badges, and milestone showcase')
+    ('Database Engine', 'MongoDB Atlas Cloud Integration', 'PASSED', 'Mongoose models with auto-reconnect, secure Atlas cluster connection'),
+    ('Project Stage-Tasks', 'Task-Level Timer & Matrix Visibility', 'PASSED', 'Individual stage tasks appear in Matrix and have their own focus timers'),
+    ('Projects View UI', 'Collapse/Expand Stages Controller', 'PASSED', 'Interactive expand/collapse toggle; project completion shown as status badge'),
+    ('Data Dump Export', 'One-Click CSV & JSON Export', 'PASSED', 'Instant CSV and JSON download in Data Grid, Timesheets, and Audit Logs'),
+    ('Priority Derivation', 'Unified Quadrant & Priority', 'PASSED', 'Priority is automatically calculated from Importance & Urgency checkboxes'),
+    ('Calendar Planner', '7-Column Responsive Grid View', 'PASSED', 'Modern calendar grid layout with today badge and click-to-schedule pills'),
+    ('Git Deployment', 'GitHub Repository Sync', 'PASSED', 'Pushed cleanly to https://github.com/code-with-varun/orbita.git (ignoring .env)')
 ]
 
 for comp, feat, stat, note in items:
