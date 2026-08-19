@@ -51,7 +51,7 @@ export default function LandingPage({
           
           {/* Brand Logo with Runit Infotech Badge */}
           <div style={{ cursor: 'pointer' }} onClick={onExploreApp}>
-            <OrbitaLogo size={38} showBadge={true} badgeText="by Runit Infotech" />
+            <OrbitaHorizontalLockup height={36} showBadge={true} badgeText="by Runit Infotech" />
           </div>
 
           {/* Navigation Links */}
@@ -469,8 +469,8 @@ export default function LandingPage({
 
       {/* 6. CALL TO ACTION BANNER */}
       <section style={{ padding: '6rem 2rem', textAlign: 'center', maxWidth: '880px', margin: '0 auto' }}>
-        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '1.5rem' }}>
-          <OrbitaLogo size={56} showTagline={true} showBadge={true} badgeText="by Runit Infotech" />
+        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '1.75rem' }}>
+          <OrbitaHorizontalLockup height={52} showBadge={true} badgeText="by Runit Infotech" />
         </div>
 
         <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '2.6rem', fontWeight: '800', marginBottom: '1rem' }}>
@@ -514,7 +514,7 @@ export default function LandingPage({
         background: theme === 'dark' ? 'rgba(8, 13, 26, 0.95)' : 'rgba(255, 255, 255, 0.95)'
       }}>
         <div style={{ maxWidth: '1280px', margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1.25rem' }}>
-          <OrbitaLogo size={32} showBadge={true} badgeText="by Runit Infotech" />
+          <OrbitaHorizontalLockup height={30} showBadge={true} badgeText="by Runit Infotech" />
 
           <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
             © {new Date().getFullYear()} Orbita. Built & Maintained by <strong>Runit Infotech</strong>. All rights reserved.
