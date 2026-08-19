@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Trophy, Star, Award, CheckCircle2, Clock, Sparkles, FolderGit2, Target, Repeat, CheckSquare } from 'lucide-react';
+import { MatrixSkeleton, CardSkeleton } from './SkeletonLoader';
 
 export default function MonthlyHighlightsView({ onSelectTask, refreshTrigger }) {
   const [data, setData] = useState(null);
@@ -12,11 +13,23 @@ export default function MonthlyHighlightsView({ onSelectTask, refreshTrigger }) 
         setData(resData);
         setLoading(false);
       })
-      .catch((err) => console.error(err));
+      .catch((err) => {
+        console.error(err);
+        setLoading(false);
+      });
   }, [refreshTrigger]);
 
   if (loading || !data) {
-    return <div className="content-area">Loading monthly highlights & recognition...</div>;
+    return (
+      <div className="content-area">
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1.25rem', marginBottom: '2rem' }}>
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="skeleton skeleton-card" style={{ height: '100px' }} />
+          ))}
+        </div>
+        <MatrixSkeleton />
+      </div>
+    );
   }
 
   const { scorecard, starred_items, badges, month } = data;

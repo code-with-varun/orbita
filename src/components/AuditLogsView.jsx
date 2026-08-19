@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ShieldCheck, User, Calendar, Tag, FileSpreadsheet, FileCode } from 'lucide-react';
 import { exportToCsv, exportToJson } from '../utils/exportUtils';
+import { TableSkeleton } from './SkeletonLoader';
 
 export default function AuditLogsView({ onSelectTask }) {
   const [logs, setLogs] = useState([]);
@@ -13,7 +14,10 @@ export default function AuditLogsView({ onSelectTask }) {
         setLogs(data);
         setLoading(false);
       })
-      .catch((err) => console.error(err));
+      .catch((err) => {
+        console.error(err);
+        setLoading(false);
+      });
   }, []);
 
   const handleExportCsv = () => {
@@ -53,7 +57,7 @@ export default function AuditLogsView({ onSelectTask }) {
 
       <div className="glass-card">
         {loading ? (
-          <div>Loading audit trail...</div>
+          <TableSkeleton rows={6} />
         ) : logs.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '3rem 1rem', color: 'var(--text-muted)' }}>
             No audit records yet.

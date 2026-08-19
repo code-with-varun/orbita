@@ -799,3 +799,98 @@ body {
   filter: brightness(1.08);
 }
 
+/* =============================================================
+   SKELETON SHIMMER LOADERS
+   ============================================================= */
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--bg-card) 25%,
+    var(--bg-card-hover) 37%,
+    var(--bg-card) 63%
+  );
+  background-size: 400% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+  border-radius: var(--radius-sm);
+}
+
+.skeleton-card {
+  height: 90px;
+  width: 100%;
+  margin-bottom: 0.75rem;
+  border: 1px solid var(--border-color);
+}
+
+.skeleton-table-row {
+  height: 48px;
+  width: 100%;
+  margin-bottom: 0.5rem;
+}
+
+.skeleton-text {
+  height: 14px;
+  border-radius: 4px;
+  margin-bottom: 0.5rem;
+}
+
+/* =============================================================
+   SCROLLABLE MATRIX & KANBAN CONTAINERS
+   ============================================================= */
+.scrollable-section {
+  max-height: 480px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 0.4rem;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-color) transparent;
+}
+
+.scrollable-section::-webkit-scrollbar {
+  width: 6px;
+}
+
+.scrollable-section::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scrollable-section::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 4px;
+}
+
+.scrollable-section::-webkit-scrollbar-thumb:hover {
+  background: var(--text-dim);
+}
+
+/* =============================================================
+   KANBAN DRAG AND DROP
+   ============================================================= */
+.kanban-card.draggable {
+  cursor: grab;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+}
+
+.kanban-card.draggable:active {
+  cursor: grabbing;
+}
+
+.kanban-card.dragging {
+  opacity: 0.4;
+  transform: scale(0.98);
+}
+
+.kanban-column.drag-over {
+  background: rgba(59, 130, 246, 0.12) !important;
+  border: 2px dashed var(--accent-blue) !important;
+}
+
+

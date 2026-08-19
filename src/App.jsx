@@ -180,6 +180,34 @@ export default function App() {
       .catch((err) => showToast(err.error || 'Failed to start timer', 'danger'));
   };
 
+  const handlePauseTimer = (taskId) => {
+    fetch(`/api/tasks/${taskId}/timer/pause`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_name: currentUser?.name || 'User' })
+    })
+      .then((res) => res.json())
+      .then(() => {
+        showToast('Focus timer paused', 'info');
+        refreshAll();
+      })
+      .catch((err) => showToast(err.error || 'Failed to pause timer', 'danger'));
+  };
+
+  const handleResumeTimer = (taskId) => {
+    fetch(`/api/tasks/${taskId}/timer/resume`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_name: currentUser?.name || 'User' })
+    })
+      .then((res) => res.json())
+      .then(() => {
+        showToast('Focus timer resumed!', 'success');
+        refreshAll();
+      })
+      .catch((err) => showToast(err.error || 'Failed to resume timer', 'danger'));
+  };
+
   const handleStopTimer = (taskId) => {
     fetch(`/api/tasks/${taskId}/timer/stop`, {
       method: 'POST',
@@ -243,6 +271,8 @@ export default function App() {
         <Header
           runningTask={runningTask}
           onStopTimer={handleStopTimer}
+          onPauseTimer={handlePauseTimer}
+          onResumeTimer={handleResumeTimer}
           onOpenTaskModal={() => {
             setDefaultScheduledDate('');
             setIsTaskModalOpen(true);

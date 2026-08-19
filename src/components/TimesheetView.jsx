@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Clock, Calendar, User, FileText, FileSpreadsheet, FileCode } from 'lucide-react';
 import { exportToCsv, exportToJson } from '../utils/exportUtils';
+import { TableSkeleton } from './SkeletonLoader';
 
 export default function TimesheetView({ onSelectTask }) {
   const [sessions, setSessions] = useState([]);
@@ -69,7 +70,7 @@ export default function TimesheetView({ onSelectTask }) {
 
       <div className="glass-card">
         {loading ? (
-          <div>Loading work sessions...</div>
+          <TableSkeleton rows={6} />
         ) : sessions.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '3rem 1rem', color: 'var(--text-muted)' }}>
             No focus sessions logged yet. Start a focus timer on any Goal or Project to record deep work effort!

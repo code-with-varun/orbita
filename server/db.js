@@ -58,7 +58,9 @@ const StageTaskSchema = new mongoose.Schema({
   priority: { type: String, default: 'High' },
   is_timer_allowed: { type: Boolean, default: true },
   is_timer_running: { type: Boolean, default: false },
+  is_timer_paused: { type: Boolean, default: false },
   timer_started_at: { type: Date },
+  timer_accumulated_seconds: { type: Number, default: 0 },
   actual_hours: { type: Number, default: 0 },
   order_index: { type: Number, default: 0 }
 });
@@ -97,7 +99,9 @@ const TaskSchema = new mongoose.Schema({
   actual_hours: { type: Number, default: 0 },
   is_timer_allowed: { type: Boolean, default: false },
   is_timer_running: { type: Boolean, default: false },
+  is_timer_paused: { type: Boolean, default: false },
   timer_started_at: { type: Date },
+  timer_accumulated_seconds: { type: Number, default: 0 },
   is_starred: { type: Boolean, default: false },
   stages: [ProjectStageSchema],
   notes: { type: String, default: '' },

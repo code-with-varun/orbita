@@ -3,6 +3,7 @@ import {
   CheckCircle2,
   Circle,
   Play,
+  Pause,
   Square,
   ArrowUpRight,
   ChevronDown,
@@ -16,12 +17,16 @@ import {
   CheckSquare,
   Layers
 } from 'lucide-react';
+import { CardSkeleton } from './SkeletonLoader';
 
 export default function TodoView({
-  tasks,
+  tasks = [],
+  loading = false,
   onUpdateTaskStatus,
   onSelectTask,
   onStartTimer,
+  onPauseTimer,
+  onResumeTimer,
   onStopTimer,
   onToggleStar,
   onRefresh,
@@ -35,10 +40,13 @@ export default function TodoView({
   const [filterWorkspace, setFilterWorkspace] = useState('');
 
   const toggleExpand = (taskId) => {
-    setExpandedTasks((prev) => ({
-      ...prev,
-      [taskId]: !prev[taskId]
-    }));
+    setExpandedTasks((prev) => {
+      const current = prev[taskId] !== undefined ? prev[taskId] : (typeFilterDefault === 'Project');
+      return {
+        ...prev,
+        [taskId]: !current
+      };
+    });
   };
 
   const handleToggleStageTask = (projectId, stageId, taskId, currentCompleted) => {
@@ -54,6 +62,28 @@ export default function TodoView({
 
   const handleStartStageTaskTimer = (projectId, stageId, taskId) => {
     fetch(`/api/projects/${projectId}/stages/${stageId}/tasks/${taskId}/timer/start`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_name: 'User' })
+    })
+      .then((res) => res.json())
+      .then(() => onRefresh())
+      .catch((err) => console.error(err));
+  };
+
+  const handlePauseStageTaskTimer = (projectId, stageId, taskId) => {
+    fetch(`/api/projects/${projectId}/stages/${stageId}/tasks/${taskId}/timer/pause`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_name: 'User' })
+    })
+      .then((res) => res.json())
+      .then(() => onRefresh())
+      .catch((err) => console.error(err));
+  };
+
+  const handleResumeStageTaskTimer = (projectId, stageId, taskId) => {
+    fetch(`/api/projects/${projectId}/stages/${stageId}/tasks/${taskId}/timer/resume`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ user_name: 'User' })
@@ -113,7 +143,9 @@ export default function TodoView({
         </div>
       </div>
 
-      {filteredTasks.length === 0 ? (
+      {loading ? (
+        <CardSkeleton count={4} />
+      ) : filteredTasks.length === 0 ? (
         <div className="glass-card" style={{ textAlign: 'center', padding: '3rem 1rem', color: 'var(--text-muted)' }}>
           No {typeFilterDefault || 'work'} items found. Create your first item from <strong>+ New Item</strong>!
         </div>
@@ -122,8 +154,13 @@ export default function TodoView({
           {filteredTasks.map((task) => {
             const isDone = task.status === 'Completed';
             const isProject = task.orbita_type === 'Project';
-            const isExpanded = expandedTasks[task.id] || (isProject && typeFilterDefault === 'Project');
+            const isExpanded = expandedTasks[task.id] !== undefined
+              ? expandedTasks[task.id]
+              : (isProject && typeFilterDefault === 'Project');
             const hasStages = task.stages && task.stages.length > 0;
+
+            const isGoalRunning = runningTask && runningTask.id === task.id && !runningTask.is_timer_paused;
+            const isGoalPaused = runningTask && runningTask.id === task.id && runningTask.is_timer_paused;
 
             return (
               <div
@@ -236,14 +273,56 @@ export default function TodoView({
 
                     {/* Focus Timer on Goal */}
                     {task.orbita_type === 'Goal' && !isDone && (
-                      <button
-                        className="btn btn-secondary"
-                        style={{ padding: '0.3rem 0.6rem', fontSize: '0.75rem' }}
-                        onClick={() => onStartTimer(task.id)}
-                        title="Start Focus Timer"
-                      >
-                        <Play size={12} fill="currentColor" /> Timer
-                      </button>
+                      <div style={{ display: 'flex', gap: '0.3rem' }}>
+                        {isGoalRunning ? (
+                          <>
+                            <button
+                              className="btn btn-secondary"
+                              style={{ padding: '0.3rem 0.6rem', fontSize: '0.75rem', color: 'var(--accent-amber)' }}
+                              onClick={() => onPauseTimer && onPauseTimer(task.id)}
+                              title="Pause Focus Timer"
+                            >
+                              <Pause size={12} /> Pause
+                            </button>
+                            <button
+                              className="btn btn-danger"
+                              style={{ padding: '0.3rem 0.6rem', fontSize: '0.75rem' }}
+                              onClick={() => onStopTimer && onStopTimer(task.id)}
+                              title="Stop Focus Timer"
+                            >
+                              <Square size={12} /> Stop
+                            </button>
+                          </>
+                        ) : isGoalPaused ? (
+                          <>
+                            <button
+                              className="btn btn-secondary"
+                              style={{ padding: '0.3rem 0.6rem', fontSize: '0.75rem', color: 'var(--accent-green)' }}
+                              onClick={() => onResumeTimer && onResumeTimer(task.id)}
+                              title="Resume Focus Timer"
+                            >
+                              <Play size={12} fill="currentColor" /> Resume
+                            </button>
+                            <button
+                              className="btn btn-danger"
+                              style={{ padding: '0.3rem 0.6rem', fontSize: '0.75rem' }}
+                              onClick={() => onStopTimer && onStopTimer(task.id)}
+                              title="Stop Focus Timer"
+                            >
+                              <Square size={12} /> Stop
+                            </button>
+                          </>
+                        ) : (
+                          <button
+                            className="btn btn-secondary"
+                            style={{ padding: '0.3rem 0.6rem', fontSize: '0.75rem' }}
+                            onClick={() => onStartTimer(task.id)}
+                            title="Start Focus Timer"
+                          >
+                            <Play size={12} fill="currentColor" /> Timer
+                          </button>
+                        )}
+                      </div>
                     )}
 
                     {/* Expand/Collapse Stages Toggle Button for Projects */}
@@ -253,7 +332,7 @@ export default function TodoView({
                         style={{ padding: '0.3rem 0.6rem', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}
                         onClick={() => toggleExpand(task.id)}
                       >
-                        <Layers size={13} /> {isExpanded ? 'Collapse' : 'Stages'} ({task.stages.length})
+                        <Layers size={13} /> {isExpanded ? 'Collapse' : 'Expand'} ({task.stages.length})
                       </button>
                     )}
 
@@ -284,6 +363,7 @@ export default function TodoView({
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.45rem', paddingLeft: '0.5rem' }}>
                             {st.tasks?.map((t) => {
                               const isTaskRunning = Boolean(t.is_timer_running);
+                              const isTaskPaused = Boolean(t.is_timer_paused);
                               const tDone = Boolean(t.is_completed);
 
                               return (
@@ -317,17 +397,46 @@ export default function TodoView({
                                       </span>
                                     )}
 
-                                    {/* Task-Level Focus Timer Button */}
+                                    {/* Task-Level Focus Timer Buttons */}
                                     {!tDone && (
                                       isTaskRunning ? (
-                                        <button
-                                          className="btn btn-danger"
-                                          style={{ padding: '0.2rem 0.45rem', fontSize: '0.7rem' }}
-                                          onClick={() => handleStopStageTaskTimer(task.id, st.id || st._id, t._id || t.id)}
-                                          title="Stop Task Timer"
-                                        >
-                                          <Square size={10} /> Stop
-                                        </button>
+                                        <div style={{ display: 'flex', gap: '0.25rem' }}>
+                                          <button
+                                            className="btn btn-secondary"
+                                            style={{ padding: '0.2rem 0.45rem', fontSize: '0.7rem', color: 'var(--accent-amber)' }}
+                                            onClick={() => handlePauseStageTaskTimer(task.id, st.id || st._id, t._id || t.id)}
+                                            title="Pause Task Timer"
+                                          >
+                                            <Pause size={10} /> Pause
+                                          </button>
+                                          <button
+                                            className="btn btn-danger"
+                                            style={{ padding: '0.2rem 0.45rem', fontSize: '0.7rem' }}
+                                            onClick={() => handleStopStageTaskTimer(task.id, st.id || st._id, t._id || t.id)}
+                                            title="Stop Task Timer"
+                                          >
+                                            <Square size={10} /> Stop
+                                          </button>
+                                        </div>
+                                      ) : isTaskPaused ? (
+                                        <div style={{ display: 'flex', gap: '0.25rem' }}>
+                                          <button
+                                            className="btn btn-secondary"
+                                            style={{ padding: '0.2rem 0.45rem', fontSize: '0.7rem', color: 'var(--accent-green)' }}
+                                            onClick={() => handleResumeStageTaskTimer(task.id, st.id || st._id, t._id || t.id)}
+                                            title="Resume Task Timer"
+                                          >
+                                            <Play size={10} fill="currentColor" /> Resume
+                                          </button>
+                                          <button
+                                            className="btn btn-danger"
+                                            style={{ padding: '0.2rem 0.45rem', fontSize: '0.7rem' }}
+                                            onClick={() => handleStopStageTaskTimer(task.id, st.id || st._id, t._id || t.id)}
+                                            title="Stop Task Timer"
+                                          >
+                                            <Square size={10} /> Stop
+                                          </button>
+                                        </div>
                                       ) : (
                                         <button
                                           className="btn btn-secondary"

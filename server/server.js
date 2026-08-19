@@ -647,20 +647,91 @@ app.delete('/api/projects/:id/stages/:stageId', async (req, res) => {
 // FOCUS TIMER & TIME SESSIONS (TASK & STAGE-TASK LEVEL)
 // -------------------------------------------------------------
 
-// Start timer on item
+// Helper to auto-stop any currently running timer across the entire system
+async function autoStopAnyRunningTimer(exceptTaskId = null, exceptStageTaskId = null) {
+  const runningTasks = await Task.find({ is_timer_running: true });
+  for (const t of runningTasks) {
+    let modified = false;
+    const now = new Date();
+
+    // Check main task timer
+    if (t.timer_started_at && t._id.toString() !== exceptTaskId?.toString()) {
+      const startMs = new Date(t.timer_started_at).getTime();
+      const elapsed = Math.max(1, Math.floor((now.getTime() - startMs) / 1000));
+      const totalSec = (t.timer_accumulated_seconds || 0) + elapsed;
+      const totalHours = Math.round((totalSec / 3600) * 100) / 100;
+      t.actual_hours = Math.round(((t.actual_hours || 0) + totalHours) * 100) / 100;
+      t.is_timer_running = false;
+      t.is_timer_paused = false;
+      t.timer_started_at = null;
+      t.timer_accumulated_seconds = 0;
+      modified = true;
+
+      const openSession = await TimeSession.findOne({ task_id: t._id, end_time: null }).sort({ _id: -1 });
+      if (openSession) {
+        openSession.end_time = now;
+        openSession.duration_seconds = totalSec;
+        openSession.notes = `${t.orbita_type} Focus Session (Auto-stopped)`;
+        await openSession.save();
+      }
+    }
+
+    // Check stage tasks in this project
+    if (t.stages) {
+      for (const st of t.stages) {
+        for (const subT of (st.tasks || [])) {
+          if (subT.is_timer_running && subT._id.toString() !== exceptStageTaskId?.toString()) {
+            const startMs = new Date(subT.timer_started_at || now).getTime();
+            const elapsed = Math.max(1, Math.floor((now.getTime() - startMs) / 1000));
+            const totalSec = (subT.timer_accumulated_seconds || 0) + elapsed;
+            const totalHours = Math.round((totalSec / 3600) * 100) / 100;
+            subT.actual_hours = Math.round(((subT.actual_hours || 0) + totalHours) * 100) / 100;
+            subT.is_timer_running = false;
+            subT.is_timer_paused = false;
+            subT.timer_started_at = null;
+            subT.timer_accumulated_seconds = 0;
+            modified = true;
+
+            const openSession = await TimeSession.findOne({
+              task_id: t._id,
+              stage_task_id: subT._id.toString(),
+              end_time: null
+            }).sort({ _id: -1 });
+
+            if (openSession) {
+              openSession.end_time = now;
+              openSession.duration_seconds = totalSec;
+              openSession.notes = `Task Focus: ${subT.title} (Auto-stopped)`;
+              await openSession.save();
+            }
+          }
+        }
+      }
+    }
+
+    if (modified) {
+      t.is_timer_running = false;
+      t.is_timer_paused = false;
+      t.timer_started_at = null;
+      t.timer_accumulated_seconds = 0;
+      await t.save();
+    }
+  }
+}
+
+// 1. Start timer on item
 app.post('/api/tasks/:id/timer/start', async (req, res) => {
   try {
     const task = await Task.findById(req.params.id);
     if (!task) return res.status(404).json({ error: 'Item not found' });
 
-    // Check if any other item or stage task is running
-    const running = await Task.findOne({ is_timer_running: true });
-    if (running && running._id.toString() !== task._id.toString()) {
-      return res.status(400).json({ error: `Focus timer already running on ${running.ticket_key}: ${running.title}` });
-    }
+    // Auto-stop any existing running timer
+    await autoStopAnyRunningTimer(task._id.toString());
 
     task.is_timer_running = true;
+    task.is_timer_paused = false;
     task.timer_started_at = new Date();
+    task.timer_accumulated_seconds = 0;
     if (task.status === 'Active') task.status = 'In Progress';
     await task.save();
 
@@ -676,13 +747,69 @@ app.post('/api/tasks/:id/timer/start', async (req, res) => {
       notes: `${task.orbita_type} Focus Session`
     });
 
-    res.json({ message: 'Focus timer started', started_at: task.timer_started_at.toISOString() });
+    res.json({
+      message: 'Focus timer started',
+      started_at: task.timer_started_at.toISOString(),
+      accumulated_seconds: 0
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// Stop timer on item
+// 2. Pause timer on item
+app.post('/api/tasks/:id/timer/pause', async (req, res) => {
+  try {
+    const task = await Task.findById(req.params.id);
+    if (!task) return res.status(404).json({ error: 'Item not found' });
+
+    if (!task.is_timer_running) {
+      return res.status(400).json({ error: 'Timer is not currently running' });
+    }
+
+    const now = new Date();
+    const start = task.timer_started_at || now;
+    const elapsedSeconds = Math.max(0, Math.floor((now.getTime() - new Date(start).getTime()) / 1000));
+    task.timer_accumulated_seconds = (task.timer_accumulated_seconds || 0) + elapsedSeconds;
+    task.is_timer_running = false;
+    task.is_timer_paused = true;
+    task.timer_started_at = null;
+    await task.save();
+
+    res.json({
+      message: 'Focus timer paused',
+      accumulated_seconds: task.timer_accumulated_seconds
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 3. Resume timer on item
+app.post('/api/tasks/:id/timer/resume', async (req, res) => {
+  try {
+    const task = await Task.findById(req.params.id);
+    if (!task) return res.status(404).json({ error: 'Item not found' });
+
+    // Auto-stop any other running timer
+    await autoStopAnyRunningTimer(task._id.toString());
+
+    task.is_timer_running = true;
+    task.is_timer_paused = false;
+    task.timer_started_at = new Date();
+    await task.save();
+
+    res.json({
+      message: 'Focus timer resumed',
+      started_at: task.timer_started_at.toISOString(),
+      accumulated_seconds: task.timer_accumulated_seconds || 0
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 4. Stop timer on item
 app.post('/api/tasks/:id/timer/stop', async (req, res) => {
   try {
     const task = await Task.findById(req.params.id);
@@ -691,20 +818,25 @@ app.post('/api/tasks/:id/timer/stop', async (req, res) => {
     const openSession = await TimeSession.findOne({ task_id: task._id, end_time: null }).sort({ _id: -1 });
     const now = new Date();
 
-    let durationSeconds = 0;
-    const start = openSession ? openSession.start_time : (task.timer_started_at || now);
-    durationSeconds = Math.max(1, Math.floor((now.getTime() - new Date(start).getTime()) / 1000));
+    let additionalSeconds = 0;
+    if (task.is_timer_running && task.timer_started_at) {
+      additionalSeconds = Math.max(0, Math.floor((now.getTime() - new Date(task.timer_started_at).getTime()) / 1000));
+    }
+
+    const totalSeconds = Math.max(1, (task.timer_accumulated_seconds || 0) + additionalSeconds);
+    const durationHours = Math.round((totalSeconds / 3600) * 100) / 100;
 
     if (openSession) {
       openSession.end_time = now;
-      openSession.duration_seconds = durationSeconds;
+      openSession.duration_seconds = totalSeconds;
       openSession.notes = req.body.notes || `${task.orbita_type} Deep Focus Session`;
       await openSession.save();
     }
 
-    const durationHours = Math.round((durationSeconds / 3600) * 100) / 100;
     task.is_timer_running = false;
+    task.is_timer_paused = false;
     task.timer_started_at = null;
+    task.timer_accumulated_seconds = 0;
     task.actual_hours = Math.round(((task.actual_hours || 0) + durationHours) * 100) / 100;
     await task.save();
 
@@ -716,13 +848,13 @@ app.post('/api/tasks/:id/timer/stop', async (req, res) => {
       workspace: task.workspace,
       user_name: req.body.user_name || 'User',
       action: 'Focus Session Completed',
-      details: `Logged ${durationHours}h focus session (${durationSeconds}s)`
+      details: `Logged ${durationHours}h focus session (${totalSeconds}s)`
     });
 
     res.json({
       message: 'Focus timer stopped',
       duration_hours: durationHours,
-      duration_seconds: durationSeconds,
+      duration_seconds: totalSeconds,
       total_actual_hours: task.actual_hours
     });
   } catch (err) {
@@ -730,7 +862,7 @@ app.post('/api/tasks/:id/timer/stop', async (req, res) => {
   }
 });
 
-// Start timer on specific Stage-Task
+// 5. Start timer on specific Stage-Task
 app.post('/api/projects/:id/stages/:stageId/tasks/:taskId/timer/start', async (req, res) => {
   try {
     const project = await Task.findById(req.params.id);
@@ -742,11 +874,18 @@ app.post('/api/projects/:id/stages/:stageId/tasks/:taskId/timer/start', async (r
     const stageTask = stage.tasks.id(req.params.taskId);
     if (!stageTask) return res.status(404).json({ error: 'Task not found' });
 
-    // Mark running
+    // Auto-stop any running timer
+    await autoStopAnyRunningTimer(project._id.toString(), stageTask._id.toString());
+
     stageTask.is_timer_running = true;
+    stageTask.is_timer_paused = false;
     stageTask.timer_started_at = new Date();
+    stageTask.timer_accumulated_seconds = 0;
+
     project.is_timer_running = true;
+    project.is_timer_paused = false;
     project.timer_started_at = stageTask.timer_started_at;
+    project.timer_accumulated_seconds = 0;
 
     if (project.status === 'Active') project.status = 'In Progress';
     await project.save();
@@ -764,13 +903,89 @@ app.post('/api/projects/:id/stages/:stageId/tasks/:taskId/timer/start', async (r
       notes: `Stage Task Focus: ${stageTask.title}`
     });
 
-    res.json({ message: 'Task focus timer started', started_at: stageTask.timer_started_at.toISOString() });
+    res.json({
+      message: 'Task focus timer started',
+      started_at: stageTask.timer_started_at.toISOString(),
+      accumulated_seconds: 0
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// Stop timer on specific Stage-Task
+// 6. Pause timer on specific Stage-Task
+app.post('/api/projects/:id/stages/:stageId/tasks/:taskId/timer/pause', async (req, res) => {
+  try {
+    const project = await Task.findById(req.params.id);
+    if (!project) return res.status(404).json({ error: 'Project not found' });
+
+    const stage = project.stages.id(req.params.stageId);
+    if (!stage) return res.status(404).json({ error: 'Stage not found' });
+
+    const stageTask = stage.tasks.id(req.params.taskId);
+    if (!stageTask) return res.status(404).json({ error: 'Task not found' });
+
+    const now = new Date();
+    const start = stageTask.timer_started_at || now;
+    const elapsedSeconds = Math.max(0, Math.floor((now.getTime() - new Date(start).getTime()) / 1000));
+
+    stageTask.timer_accumulated_seconds = (stageTask.timer_accumulated_seconds || 0) + elapsedSeconds;
+    stageTask.is_timer_running = false;
+    stageTask.is_timer_paused = true;
+    stageTask.timer_started_at = null;
+
+    project.is_timer_running = false;
+    project.is_timer_paused = true;
+    project.timer_started_at = null;
+    project.timer_accumulated_seconds = stageTask.timer_accumulated_seconds;
+
+    await project.save();
+
+    res.json({
+      message: 'Task focus timer paused',
+      accumulated_seconds: stageTask.timer_accumulated_seconds
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 7. Resume timer on specific Stage-Task
+app.post('/api/projects/:id/stages/:stageId/tasks/:taskId/timer/resume', async (req, res) => {
+  try {
+    const project = await Task.findById(req.params.id);
+    if (!project) return res.status(404).json({ error: 'Project not found' });
+
+    const stage = project.stages.id(req.params.stageId);
+    if (!stage) return res.status(404).json({ error: 'Stage not found' });
+
+    const stageTask = stage.tasks.id(req.params.taskId);
+    if (!stageTask) return res.status(404).json({ error: 'Task not found' });
+
+    // Auto-stop any running timer
+    await autoStopAnyRunningTimer(project._id.toString(), stageTask._id.toString());
+
+    stageTask.is_timer_running = true;
+    stageTask.is_timer_paused = false;
+    stageTask.timer_started_at = new Date();
+
+    project.is_timer_running = true;
+    project.is_timer_paused = false;
+    project.timer_started_at = stageTask.timer_started_at;
+
+    await project.save();
+
+    res.json({
+      message: 'Task focus timer resumed',
+      started_at: stageTask.timer_started_at.toISOString(),
+      accumulated_seconds: stageTask.timer_accumulated_seconds || 0
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 8. Stop timer on specific Stage-Task
 app.post('/api/projects/:id/stages/:stageId/tasks/:taskId/timer/stop', async (req, res) => {
   try {
     const project = await Task.findById(req.params.id);
@@ -789,23 +1004,31 @@ app.post('/api/projects/:id/stages/:stageId/tasks/:taskId/timer/stop', async (re
     }).sort({ _id: -1 });
 
     const now = new Date();
-    const start = openSession ? openSession.start_time : (stageTask.timer_started_at || now);
-    const durationSeconds = Math.max(1, Math.floor((now.getTime() - new Date(start).getTime()) / 1000));
-    const durationHours = Math.round((durationSeconds / 3600) * 100) / 100;
+    let additionalSeconds = 0;
+    if (stageTask.is_timer_running && stageTask.timer_started_at) {
+      additionalSeconds = Math.max(0, Math.floor((now.getTime() - new Date(stageTask.timer_started_at).getTime()) / 1000));
+    }
+
+    const totalSeconds = Math.max(1, (stageTask.timer_accumulated_seconds || 0) + additionalSeconds);
+    const durationHours = Math.round((totalSeconds / 3600) * 100) / 100;
 
     if (openSession) {
       openSession.end_time = now;
-      openSession.duration_seconds = durationSeconds;
+      openSession.duration_seconds = totalSeconds;
       openSession.notes = req.body.notes || `Task Focus: ${stageTask.title}`;
       await openSession.save();
     }
 
     stageTask.is_timer_running = false;
+    stageTask.is_timer_paused = false;
     stageTask.timer_started_at = null;
+    stageTask.timer_accumulated_seconds = 0;
     stageTask.actual_hours = Math.round(((stageTask.actual_hours || 0) + durationHours) * 100) / 100;
 
     project.is_timer_running = false;
+    project.is_timer_paused = false;
     project.timer_started_at = null;
+    project.timer_accumulated_seconds = 0;
     project.actual_hours = Math.round(((project.actual_hours || 0) + durationHours) * 100) / 100;
 
     await project.save();
@@ -818,13 +1041,13 @@ app.post('/api/projects/:id/stages/:stageId/tasks/:taskId/timer/stop', async (re
       workspace: project.workspace,
       user_name: req.body.user_name || 'User',
       action: 'Task Focus Session Completed',
-      details: `Logged ${durationHours}h focus on "${stageTask.title}" (${durationSeconds}s)`
+      details: `Logged ${durationHours}h focus on "${stageTask.title}" (${totalSeconds}s)`
     });
 
     res.json({
       message: 'Task focus timer stopped',
       duration_hours: durationHours,
-      duration_seconds: durationSeconds,
+      duration_seconds: totalSeconds,
       task_actual_hours: stageTask.actual_hours,
       project_actual_hours: project.actual_hours
     });

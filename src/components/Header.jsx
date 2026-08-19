@@ -10,26 +10,38 @@ import {
   RotateCcw,
   Briefcase,
   UserCheck,
-  ShieldCheck
+  ShieldCheck,
+  Pause,
+  Play
 } from 'lucide-react';
 
-function LiveTimerBadge({ runningTask, onStopTimer }) {
+function LiveTimerBadge({ runningTask, onStopTimer, onPauseTimer, onResumeTimer }) {
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const isPaused = Boolean(runningTask?.is_timer_paused);
+  const accumulated = runningTask?.timer_accumulated_seconds || 0;
 
   useEffect(() => {
-    if (!runningTask?.timer_started_at) return;
+    if (isPaused) {
+      setElapsedSeconds(accumulated);
+      return;
+    }
+
+    if (!runningTask?.timer_started_at) {
+      setElapsedSeconds(accumulated);
+      return;
+    }
 
     const calculateElapsed = () => {
       const startMs = new Date(runningTask.timer_started_at).getTime();
       const nowMs = Date.now();
       const diff = Math.max(0, Math.floor((nowMs - startMs) / 1000));
-      setElapsedSeconds(diff);
+      setElapsedSeconds(accumulated + diff);
     };
 
     calculateElapsed();
     const interval = setInterval(calculateElapsed, 1000);
     return () => clearInterval(interval);
-  }, [runningTask?.timer_started_at]);
+  }, [runningTask?.timer_started_at, runningTask?.is_timer_paused, accumulated, isPaused]);
 
   const formatTime = (totalSec) => {
     const hrs = Math.floor(totalSec / 3600);
@@ -39,26 +51,49 @@ function LiveTimerBadge({ runningTask, onStopTimer }) {
   };
 
   return (
-    <div className="running-timer-badge" style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+    <div className="running-timer-badge" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: isPaused ? 'rgba(245, 158, 11, 0.12)' : 'rgba(239, 68, 68, 0.12)', border: `1px solid ${isPaused ? 'var(--accent-amber)' : 'rgba(239, 68, 68, 0.3)'}` }}>
       <div
         style={{
           width: '8px',
           height: '8px',
           borderRadius: '50%',
-          background: '#ef4444',
-          boxShadow: '0 0 8px #ef4444'
+          background: isPaused ? 'var(--accent-amber)' : '#ef4444',
+          boxShadow: isPaused ? '0 0 8px var(--accent-amber)' : '0 0 8px #ef4444'
         }}
       />
-      <span style={{ fontWeight: '800', color: 'var(--accent-red)', fontFamily: 'monospace', fontSize: '0.9rem' }}>
-        {formatTime(elapsedSeconds)}
+      <span style={{ fontWeight: '800', color: isPaused ? 'var(--accent-amber)' : 'var(--accent-red)', fontFamily: 'monospace', fontSize: '0.9rem' }}>
+        {formatTime(elapsedSeconds)} {isPaused && <span style={{ fontSize: '0.65rem', opacity: 0.8 }}>(PAUSED)</span>}
       </span>
-      <span style={{ maxWidth: '130px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: '0.8rem' }}>
+      <span style={{ maxWidth: '110px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: '0.78rem' }}>
         {runningTask.ticket_key}: {runningTask.title}
       </span>
+
+      {/* Pause / Resume Button */}
+      {isPaused ? (
+        <button
+          onClick={() => onResumeTimer && onResumeTimer(runningTask.id)}
+          className="btn btn-secondary"
+          style={{ padding: '0.2rem 0.45rem', fontSize: '0.72rem', borderRadius: '10px', color: 'var(--accent-green)' }}
+          title="Resume Focus Timer"
+        >
+          <Play size={10} fill="currentColor" /> Resume
+        </button>
+      ) : (
+        <button
+          onClick={() => onPauseTimer && onPauseTimer(runningTask.id)}
+          className="btn btn-secondary"
+          style={{ padding: '0.2rem 0.45rem', fontSize: '0.72rem', borderRadius: '10px', color: 'var(--accent-amber)' }}
+          title="Pause Focus Timer"
+        >
+          <Pause size={10} /> Pause
+        </button>
+      )}
+
+      {/* Stop Button */}
       <button
         onClick={() => onStopTimer(runningTask.id)}
         className="btn btn-danger"
-        style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem', borderRadius: '12px' }}
+        style={{ padding: '0.2rem 0.45rem', fontSize: '0.72rem', borderRadius: '10px' }}
         title="Stop Focus Timer"
       >
         <Square size={10} /> Stop
@@ -70,6 +105,8 @@ function LiveTimerBadge({ runningTask, onStopTimer }) {
 export default function Header({
   runningTask,
   onStopTimer,
+  onPauseTimer,
+  onResumeTimer,
   onOpenTaskModal,
   onOpenAuthModal,
   currentUser,
@@ -145,7 +182,12 @@ export default function Header({
       <div className="header-actions">
         {/* Active Live Ticking Stopwatch Badge */}
         {runningTask && (
-          <LiveTimerBadge runningTask={runningTask} onStopTimer={onStopTimer} />
+          <LiveTimerBadge
+            runningTask={runningTask}
+            onStopTimer={onStopTimer}
+            onPauseTimer={onPauseTimer}
+            onResumeTimer={onResumeTimer}
+          />
         )}
 
         {/* Superadmin-Only System Reset Button */}
