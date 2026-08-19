@@ -8,12 +8,12 @@ import {
   Calendar,
   Clock,
   ShieldAlert,
-  Orbit,
   Grid,
   Trophy,
   Table,
   Kanban
 } from 'lucide-react';
+import { OrbitaIcon } from './OrbitaLogo';
 
 export default function Sidebar({ activeView, setActiveView, stats }) {
   const navSections = [
@@ -53,13 +53,27 @@ export default function Sidebar({ activeView, setActiveView, stats }) {
 
   return (
     <aside className="sidebar">
-      <div className="brand" style={{ cursor: 'pointer' }} onClick={() => setActiveView('dashboard')}>
-        <div style={{ width: '36px', height: '36px', borderRadius: '10px', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(255, 255, 255, 0.05)', border: '1px solid var(--border-color)' }}>
-          <img src="/logo.png" alt="Orbita Logo" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+      <div className="brand" style={{ cursor: 'pointer', padding: '0.4rem 0' }} onClick={() => setActiveView('dashboard')}>
+        <div style={{
+          width: '38px',
+          height: '38px',
+          borderRadius: '10px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: 'rgba(124, 58, 237, 0.08)',
+          border: '1px solid var(--border-color)',
+          boxShadow: '0 0 12px rgba(124, 58, 237, 0.2)'
+        }}>
+          <OrbitaIcon size={26} />
         </div>
         <div>
-          <h2 className="brand-title" style={{ letterSpacing: '0.05em' }}>ORBITA</h2>
-          <p style={{ fontSize: '0.68rem', color: 'var(--text-dim)', letterSpacing: '0.04em' }}>Work Management OS</p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+            <h2 className="brand-title" style={{ letterSpacing: '0.04em', fontSize: '1.15rem' }}>ORBITA</h2>
+          </div>
+          <p style={{ fontSize: '0.66rem', color: 'var(--text-dim)', letterSpacing: '0.02em' }}>
+            Work Management Tool <span style={{ opacity: 0.7 }}>• Runit Infotech</span>
+          </p>
         </div>
       </div>
 

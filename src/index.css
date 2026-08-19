@@ -30,12 +30,28 @@
   --bg-card: #ffffff;
   --bg-card-hover: #f1f5f9;
   --border-color: #e2e8f0;
-  --border-glow: rgba(59, 130, 246, 0.5);
+  --border-glow: rgba(124, 58, 237, 0.35);
   
   --text-main: #0f172a;
-  --text-muted: #334155;
+  --text-muted: #475569;
   --text-dim: #64748b;
   --input-bg: #ffffff;
+}
+
+[data-theme='light'] .glass-card {
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.05), 0 1px 3px rgba(15, 23, 42, 0.03);
+  border: 1px solid #e2e8f0;
+}
+
+[data-theme='light'] .task-card {
+  background: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04) !important;
+}
+
+[data-theme='light'] .task-card:hover {
+  border-color: var(--accent-purple) !important;
+  box-shadow: 0 4px 14px rgba(124, 58, 237, 0.1) !important;
 }
 
 * {

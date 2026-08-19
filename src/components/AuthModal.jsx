@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { LogIn, UserPlus, Orbit, ShieldCheck } from 'lucide-react';
+import { LogIn, UserPlus, ShieldCheck } from 'lucide-react';
+import OrbitaLogo from './OrbitaLogo';
 
 export default function AuthModal({ isOpen, initialIsRegister = false, onClose, onLoginSuccess }) {
   const [isRegister, setIsRegister] = useState(initialIsRegister);
@@ -58,29 +59,15 @@ export default function AuthModal({ isOpen, initialIsRegister = false, onClose, 
         style={{ maxWidth: '440px', padding: '2.25rem' }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div style={{ textAlign: 'center', marginBottom: '1.75rem' }}>
-          <div
-            style={{
-              width: '64px',
-              height: '64px',
-              borderRadius: '16px',
-              overflow: 'hidden',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              margin: '0 auto 0.85rem',
-              boxShadow: '0 0 25px rgba(59, 130, 246, 0.35)',
-              border: '1px solid var(--border-color)',
-              background: 'rgba(255, 255, 255, 0.05)'
-            }}
-          >
-            <img src="/logo.png" alt="Orbita Logo" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+        <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '1rem' }}>
+            <OrbitaLogo size={46} showTagline={true} showBadge={true} badgeText="by Runit Infotech" />
           </div>
-          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '1.6rem', fontWeight: '800', color: 'var(--text-main)' }}>
-            {isRegister ? 'Get Started with Orbita' : 'Welcome Back'}
+          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '1.45rem', fontWeight: '800', color: 'var(--text-main)' }}>
+            {isRegister ? 'Create Your Account' : 'Welcome Back'}
           </h2>
-          <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
-            {isRegister ? 'Create your account to organize your tasks & workflows' : 'Sign in to access your workspace'}
+          <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
+            {isRegister ? 'Join Orbita to streamline your execution & workflows' : 'Sign in to access your workspace'}
           </p>
         </div>
 
