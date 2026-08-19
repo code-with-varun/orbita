@@ -3,12 +3,16 @@ import { ShieldCheck, User, Calendar, Tag, FileSpreadsheet, FileCode } from 'luc
 import { exportToCsv, exportToJson } from '../utils/exportUtils';
 import { TableSkeleton } from './SkeletonLoader';
 
-export default function AuditLogsView({ onSelectTask }) {
+export default function AuditLogsView({ currentUser, onSelectTask }) {
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch('/api/audit-logs')
+    let url = '/api/audit-logs?';
+    if (currentUser) {
+      url += `user_id=${currentUser.id || ''}&user_email=${encodeURIComponent(currentUser.email || '')}&user_role=${currentUser.role || ''}&user_name=${encodeURIComponent(currentUser.name || '')}&`;
+    }
+    fetch(url)
       .then((res) => res.json())
       .then((data) => {
         setLogs(data);
@@ -18,7 +22,7 @@ export default function AuditLogsView({ onSelectTask }) {
         console.error(err);
         setLoading(false);
       });
-  }, []);
+  }, [currentUser]);
 
   const handleExportCsv = () => {
     const columns = [

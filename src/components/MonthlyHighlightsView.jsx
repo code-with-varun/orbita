@@ -2,12 +2,16 @@ import React, { useState, useEffect } from 'react';
 import { Trophy, Star, Award, CheckCircle2, Clock, Sparkles, FolderGit2, Target, Repeat, CheckSquare } from 'lucide-react';
 import { MatrixSkeleton, CardSkeleton } from './SkeletonLoader';
 
-export default function MonthlyHighlightsView({ onSelectTask, refreshTrigger }) {
+export default function MonthlyHighlightsView({ currentUser, onSelectTask, refreshTrigger }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch('/api/highlights/month')
+    let url = '/api/highlights/month?';
+    if (currentUser) {
+      url += `user_id=${currentUser.id || ''}&user_email=${encodeURIComponent(currentUser.email || '')}&user_role=${currentUser.role || ''}&user_name=${encodeURIComponent(currentUser.name || '')}&`;
+    }
+    fetch(url)
       .then((res) => res.json())
       .then((resData) => {
         setData(resData);
@@ -17,7 +21,7 @@ export default function MonthlyHighlightsView({ onSelectTask, refreshTrigger }) 
         console.error(err);
         setLoading(false);
       });
-  }, [refreshTrigger]);
+  }, [refreshTrigger, currentUser]);
 
   if (loading || !data) {
     return (

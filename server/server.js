@@ -120,10 +120,30 @@ app.get('/api/auth/users', async (req, res) => {
 // WORK ITEMS (TASK | ROUTINE | GOAL | PROJECT)
 // -------------------------------------------------------------
 
+function buildUserFilter(req) {
+  const { user_id, user_email, user_role, user_name } = req.query;
+
+  // Superadmin has global visibility
+  if (user_role === 'Superadmin') {
+    return {};
+  }
+
+  const conditions = [];
+  if (user_id) conditions.push({ user_id });
+  if (user_email) conditions.push({ user_email: user_email.toLowerCase().trim() });
+  if (user_name) conditions.push({ created_by: user_name });
+
+  if (conditions.length > 0) {
+    return { $or: conditions };
+  }
+  return {};
+}
+
 app.get('/api/tasks', async (req, res) => {
   try {
     const { orbita_type, workspace, priority_quadrant, status, search, is_starred } = req.query;
-    const query = {};
+    const userFilter = buildUserFilter(req);
+    const query = { ...userFilter };
 
     if (orbita_type) {
       query.orbita_type = new RegExp(`^${orbita_type}$`, 'i');
@@ -331,7 +351,9 @@ app.post('/api/tasks', async (req, res) => {
       priority: final_priority,
       status,
       assignee,
-      created_by,
+      user_id: req.body.user_id || null,
+      user_email: req.body.user_email ? req.body.user_email.toLowerCase().trim() : null,
+      created_by: created_by || req.body.user_name || 'User',
       scheduled_date: scheduled_date || null,
       due_date: due_date || null,
       recurrence_type: orbita_type === 'Routine' ? recurrence_type : null,
@@ -347,11 +369,13 @@ app.post('/api/tasks', async (req, res) => {
 
     await AuditLog.create({
       task_id: task._id,
+      user_id: task.user_id,
+      user_email: task.user_email,
       ticket_key: task.ticket_key,
       task_title: task.title,
       orbita_type: task.orbita_type,
       workspace: task.workspace,
-      user_name: created_by,
+      user_name: created_by || req.body.user_name || 'User',
       action: `${orbita_type} Created`,
       details: `Created ${ticket_key}: ${title} (${workspace} • ${orbita_type})`
     });
@@ -1059,7 +1083,8 @@ app.post('/api/projects/:id/stages/:stageId/tasks/:taskId/timer/stop', async (re
 // Timesheets
 app.get('/api/timesheets', async (req, res) => {
   try {
-    const sessions = await TimeSession.find().sort({ _id: -1 });
+    const userFilter = buildUserFilter(req);
+    const sessions = await TimeSession.find(userFilter).sort({ _id: -1 });
     const formatted = sessions.map((s) => ({
       ...s.toObject(),
       id: s._id.toString(),
@@ -1078,7 +1103,8 @@ app.get('/api/timesheets', async (req, res) => {
 app.get('/api/matrix', async (req, res) => {
   try {
     const { workspace } = req.query;
-    const query = { status: { $ne: 'Completed' } };
+    const userFilter = buildUserFilter(req);
+    const query = { ...userFilter, status: { $ne: 'Completed' } };
     if (workspace && workspace !== 'All') {
       query.workspace = new RegExp(`^${workspace}$`, 'i');
     }
@@ -1156,20 +1182,22 @@ app.get('/api/matrix', async (req, res) => {
 app.get('/api/highlights/month', async (req, res) => {
   try {
     const currentMonth = new Date().toLocaleString('default', { month: 'long', year: 'numeric' });
+    const userFilter = buildUserFilter(req);
 
-    const total = await Task.countDocuments();
-    const completed = await Task.countDocuments({ status: 'Completed' });
-    const tasksDone = await Task.countDocuments({ orbita_type: 'Task', status: 'Completed' });
-    const routinesDone = await Task.countDocuments({ orbita_type: 'Routine', status: 'Completed' });
-    const goalsDone = await Task.countDocuments({ orbita_type: 'Goal', status: 'Completed' });
-    const projectsDone = await Task.countDocuments({ orbita_type: 'Project', status: 'Completed' });
+    const total = await Task.countDocuments(userFilter);
+    const completed = await Task.countDocuments({ ...userFilter, status: 'Completed' });
+    const tasksDone = await Task.countDocuments({ ...userFilter, orbita_type: 'Task', status: 'Completed' });
+    const routinesDone = await Task.countDocuments({ ...userFilter, orbita_type: 'Routine', status: 'Completed' });
+    const goalsDone = await Task.countDocuments({ ...userFilter, orbita_type: 'Goal', status: 'Completed' });
+    const projectsDone = await Task.countDocuments({ ...userFilter, orbita_type: 'Project', status: 'Completed' });
 
     const totalHoursAgg = await Task.aggregate([
+      { $match: userFilter },
       { $group: { _id: null, total: { $sum: '$actual_hours' } } }
     ]);
     const focusHours = Math.round((totalHoursAgg[0]?.total || 0) * 10) / 10;
 
-    const starredCompleted = await Task.find({ is_starred: true, status: 'Completed' }).sort({ completed_at: -1 });
+    const starredCompleted = await Task.find({ ...userFilter, is_starred: true, status: 'Completed' }).sort({ completed_at: -1 });
 
     const badges = [
       { id: 'task_finisher', title: 'Task Finisher', desc: 'Completed single-action tasks', earned: tasksDone > 0, color: 'var(--accent-green)' },
@@ -1207,7 +1235,8 @@ app.get('/api/highlights/month', async (req, res) => {
 app.get('/api/dashboard/stats', async (req, res) => {
   try {
     const { workspace } = req.query;
-    const query = {};
+    const userFilter = buildUserFilter(req);
+    const query = { ...userFilter };
     if (workspace && workspace !== 'All') {
       query.workspace = new RegExp(`^${workspace}$`, 'i');
     }
@@ -1259,7 +1288,8 @@ app.get('/api/dashboard/stats', async (req, res) => {
 
 app.get('/api/audit-logs', async (req, res) => {
   try {
-    const logs = await AuditLog.find().sort({ _id: -1 }).limit(150);
+    const userFilter = buildUserFilter(req);
+    const logs = await AuditLog.find(userFilter).sort({ _id: -1 }).limit(150);
     const formatted = logs.map((l) => ({
       ...l.toObject(),
       id: l._id.toString(),

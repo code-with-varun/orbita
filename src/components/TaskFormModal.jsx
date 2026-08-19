@@ -132,6 +132,8 @@ export default function TaskFormModal({ isOpen, onClose, onRefresh, currentUser,
       status: 'Active',
       assignee: assignee.trim() || currentUser?.name || 'User',
       created_by: currentUser?.name || 'User',
+      user_id: currentUser?.id || null,
+      user_email: currentUser?.email || null,
       scheduled_date: scheduledDate || null,
       due_date: dueDate || null,
       recurrence_type: orbitaType === 'Routine' ? recurrenceType : null,
@@ -417,27 +419,29 @@ export default function TaskFormModal({ isOpen, onClose, onRefresh, currentUser,
             </div>
           )}
 
-          {/* 5. Dates */}
-          <div className="form-row" style={{ marginBottom: '1.25rem' }}>
-            <div>
-              <label className="form-label">Scheduled Date</label>
-              <input
-                type="date"
-                className="form-input"
-                value={scheduledDate}
-                onChange={(e) => setScheduledDate(e.target.value)}
-              />
+          {/* 5. Dates (Hidden for Routine as requested) */}
+          {orbitaType !== 'Routine' && (
+            <div className="form-row" style={{ marginBottom: '1.25rem' }}>
+              <div>
+                <label className="form-label">Scheduled Date</label>
+                <input
+                  type="date"
+                  className="form-input"
+                  value={scheduledDate}
+                  onChange={(e) => setScheduledDate(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="form-label">Due Date (Deadline)</label>
+                <input
+                  type="date"
+                  className="form-input"
+                  value={dueDate}
+                  onChange={(e) => setDueDate(e.target.value)}
+                />
+              </div>
             </div>
-            <div>
-              <label className="form-label">Due Date (Deadline)</label>
-              <input
-                type="date"
-                className="form-input"
-                value={dueDate}
-                onChange={(e) => setDueDate(e.target.value)}
-              />
-            </div>
-          </div>
+          )}
 
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '1.5rem' }}>
             <button type="button" className="btn btn-secondary" onClick={onClose}>

@@ -44,13 +44,6 @@ export default function AuthModal({ isOpen, onClose, onLoginSuccess }) {
       });
   };
 
-  const handleFillSuperadmin = () => {
-    setIsRegister(false);
-    setEmail('superadmin@orbita.com');
-    setPassword('superadmin123');
-    setErrorMsg('');
-  };
-
   if (!isOpen) return null;
 
   return (
@@ -190,20 +183,7 @@ export default function AuthModal({ isOpen, onClose, onLoginSuccess }) {
           </button>
         </form>
 
-        {/* Superadmin Quick Access */}
-        <div style={{ marginTop: '1.25rem', paddingTop: '1rem', borderTop: '1px solid var(--border-color)', textAlign: 'center' }}>
-          <button
-            type="button"
-            className="btn btn-secondary"
-            onClick={handleFillSuperadmin}
-            style={{ width: '100%', justifyContent: 'center', fontSize: '0.78rem', color: 'var(--accent-amber)' }}
-            title="Pre-fill default Super Admin credentials"
-          >
-            <ShieldCheck size={14} /> Use Super Admin (superadmin@orbita.com)
-          </button>
-        </div>
-
-        <div style={{ textAlign: 'center', marginTop: '1rem', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+        <div style={{ textAlign: 'center', marginTop: '1.5rem', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
           {isRegister ? 'Already have an account?' : "Don't have an account yet?"}{' '}
           <button
             type="button"

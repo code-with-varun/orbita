@@ -76,6 +76,9 @@ export default function App() {
     if (workspaceFilter && workspaceFilter !== 'All') {
       url += `workspace=${workspaceFilter}&`;
     }
+    if (currentUser) {
+      url += `user_id=${currentUser.id || ''}&user_email=${encodeURIComponent(currentUser.email || '')}&user_role=${currentUser.role || ''}&user_name=${encodeURIComponent(currentUser.name || '')}&`;
+    }
     fetch(url)
       .then((res) => res.json())
       .then((data) => setStats(data))
@@ -89,6 +92,9 @@ export default function App() {
     }
     if (searchTerm) {
       url += `search=${encodeURIComponent(searchTerm)}&`;
+    }
+    if (currentUser) {
+      url += `user_id=${currentUser.id || ''}&user_email=${encodeURIComponent(currentUser.email || '')}&user_role=${currentUser.role || ''}&user_name=${encodeURIComponent(currentUser.name || '')}&`;
     }
 
     fetch(url)
@@ -368,8 +374,11 @@ export default function App() {
         {/* Priority Matrix */}
         {activeView === 'matrix' && (
           <PriorityMatrixView
+            currentUser={currentUser}
             onSelectTask={(id) => setSelectedTaskId(id)}
             onStartTimer={handleStartTimer}
+            onPauseTimer={handlePauseTimer}
+            onResumeTimer={handleResumeTimer}
             onStopTimer={handleStopTimer}
             onToggleStar={handleToggleStar}
             onUpdateTaskStatus={handleUpdateTaskStatus}
@@ -382,6 +391,7 @@ export default function App() {
         {/* Monthly Highlights */}
         {activeView === 'highlights' && (
           <MonthlyHighlightsView
+            currentUser={currentUser}
             onSelectTask={(id) => setSelectedTaskId(id)}
             refreshTrigger={refreshTrigger}
           />
@@ -423,12 +433,12 @@ export default function App() {
 
         {/* Timesheet Log */}
         {activeView === 'timesheet' && (
-          <TimesheetView onSelectTask={(id) => setSelectedTaskId(id)} />
+          <TimesheetView currentUser={currentUser} onSelectTask={(id) => setSelectedTaskId(id)} />
         )}
 
         {/* Audit Logs */}
         {activeView === 'audit_logs' && (
-          <AuditLogsView onSelectTask={(id) => setSelectedTaskId(id)} />
+          <AuditLogsView currentUser={currentUser} onSelectTask={(id) => setSelectedTaskId(id)} />
         )}
       </div>
 

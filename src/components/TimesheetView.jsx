@@ -3,19 +3,26 @@ import { Clock, Calendar, User, FileText, FileSpreadsheet, FileCode } from 'luci
 import { exportToCsv, exportToJson } from '../utils/exportUtils';
 import { TableSkeleton } from './SkeletonLoader';
 
-export default function TimesheetView({ onSelectTask }) {
+export default function TimesheetView({ currentUser, onSelectTask }) {
   const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch('/api/timesheets')
+    let url = '/api/timesheets?';
+    if (currentUser) {
+      url += `user_id=${currentUser.id || ''}&user_email=${encodeURIComponent(currentUser.email || '')}&user_role=${currentUser.role || ''}&user_name=${encodeURIComponent(currentUser.name || '')}&`;
+    }
+    fetch(url)
       .then((res) => res.json())
       .then((data) => {
         setSessions(data);
         setLoading(false);
       })
-      .catch((err) => console.error(err));
-  }, []);
+      .catch((err) => {
+        console.error(err);
+        setLoading(false);
+      });
+  }, [currentUser]);
 
   const totalSeconds = sessions.reduce((acc, curr) => acc + (curr.duration_seconds || 0), 0);
   const totalHours = Math.round((totalSeconds / 3600) * 100) / 100;

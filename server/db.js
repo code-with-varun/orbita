@@ -87,6 +87,8 @@ const TaskSchema = new mongoose.Schema({
   priority: { type: String, default: 'High' },
   status: { type: String, default: 'Active', enum: ['Active', 'In Progress', 'Paused', 'Completed'] },
   assignee: { type: String, default: 'Unassigned' },
+  user_id: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  user_email: { type: String },
   created_by: { type: String, default: 'User' },
   scheduled_date: { type: String },
   due_date: { type: String },
@@ -112,6 +114,8 @@ const TaskSchema = new mongoose.Schema({
 // 5. Time Sessions Schema
 const TimeSessionSchema = new mongoose.Schema({
   task_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Task' },
+  user_id: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  user_email: { type: String },
   stage_task_id: { type: String },
   ticket_key: { type: String },
   task_title: { type: String },
@@ -128,6 +132,8 @@ const TimeSessionSchema = new mongoose.Schema({
 // 6. Audit Logs Schema
 const AuditLogSchema = new mongoose.Schema({
   task_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Task' },
+  user_id: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  user_email: { type: String },
   ticket_key: { type: String },
   task_title: { type: String },
   orbita_type: { type: String },

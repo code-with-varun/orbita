@@ -2,14 +2,29 @@ import React, { useState, useEffect } from 'react';
 import { Play, Pause, Square, CheckCircle2, Star, Repeat, Target, FolderGit2, CheckSquare } from 'lucide-react';
 import { MatrixSkeleton } from './SkeletonLoader';
 
-export default function PriorityMatrixView({ onSelectTask, onStartTimer, onPauseTimer, onResumeTimer, onStopTimer, onToggleStar, onUpdateTaskStatus, refreshTrigger, workspaceFilter, onRefresh }) {
+export default function PriorityMatrixView({
+  currentUser,
+  onSelectTask,
+  onStartTimer,
+  onPauseTimer,
+  onResumeTimer,
+  onStopTimer,
+  onToggleStar,
+  onUpdateTaskStatus,
+  refreshTrigger,
+  workspaceFilter,
+  onRefresh
+}) {
   const [matrixData, setMatrixData] = useState({ Q1: [], Q2: [], Q3: [], Q4: [] });
   const [loading, setLoading] = useState(true);
 
   const fetchMatrix = () => {
-    let url = '/api/matrix';
+    let url = '/api/matrix?';
     if (workspaceFilter && workspaceFilter !== 'All') {
-      url += `?workspace=${workspaceFilter}`;
+      url += `workspace=${workspaceFilter}&`;
+    }
+    if (currentUser) {
+      url += `user_id=${currentUser.id || ''}&user_email=${encodeURIComponent(currentUser.email || '')}&user_role=${currentUser.role || ''}&user_name=${encodeURIComponent(currentUser.name || '')}&`;
     }
     fetch(url)
       .then((res) => res.json())
