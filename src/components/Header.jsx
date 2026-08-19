@@ -9,7 +9,8 @@ import {
   Sun,
   RotateCcw,
   Briefcase,
-  UserCheck
+  UserCheck,
+  ShieldCheck
 } from 'lucide-react';
 
 function LiveTimerBadge({ runningTask, onStopTimer }) {
@@ -82,9 +83,15 @@ export default function Header({
   onResetDatabase
 }) {
   const [showUserDropdown, setShowUserDropdown] = useState(false);
+  const isSuperadmin = currentUser?.role === 'Superadmin';
 
   const handleResetClick = () => {
-    if (window.confirm('Wipe database to completely clean blank state (0 users, 0 items)?')) {
+    if (!isSuperadmin) {
+      alert('Access Denied: Only a Super Admin (superadmin@orbita.com) can perform a system reset.');
+      return;
+    }
+
+    if (window.confirm('SUPERADMIN ACTION: Wipe all work items and reset the system to a clean setup for fresh users?')) {
       if (onResetDatabase) {
         onResetDatabase();
       }
@@ -141,15 +148,17 @@ export default function Header({
           <LiveTimerBadge runningTask={runningTask} onStopTimer={onStopTimer} />
         )}
 
-        {/* Reset System Button */}
-        <button
-          className="btn btn-secondary"
-          onClick={handleResetClick}
-          title="Reset database to 100% clean blank state"
-          style={{ fontSize: '0.8rem', padding: '0.45rem 0.8rem' }}
-        >
-          <RotateCcw size={14} /> Reset
-        </button>
+        {/* Superadmin-Only System Reset Button */}
+        {isSuperadmin && (
+          <button
+            className="btn btn-secondary"
+            onClick={handleResetClick}
+            title="Superadmin: Reset app to fresh setup (preserves Superadmin)"
+            style={{ fontSize: '0.8rem', padding: '0.45rem 0.8rem', border: '1px solid var(--accent-amber)', color: 'var(--accent-amber)' }}
+          >
+            <RotateCcw size={14} /> Reset System
+          </button>
+        )}
 
         {/* Theme Toggle Button */}
         <button
@@ -172,13 +181,24 @@ export default function Header({
             <div
               className="user-badge-header"
               onClick={() => setShowUserDropdown(!showUserDropdown)}
+              style={isSuperadmin ? { border: '1px solid var(--accent-amber)' } : {}}
             >
-              <div className="user-avatar">
-                {currentUser.name ? currentUser.name.substring(0, 2).toUpperCase() : 'U'}
+              <div
+                className="user-avatar"
+                style={isSuperadmin ? { background: 'linear-gradient(135deg, #f59e0b, #ef4444)', color: '#fff' } : {}}
+              >
+                {isSuperadmin ? '👑' : (currentUser.name ? currentUser.name.substring(0, 2).toUpperCase() : 'U')}
               </div>
-              <span style={{ fontSize: '0.85rem', fontWeight: '600' }}>
-                {currentUser.name}
-              </span>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+                <span style={{ fontSize: '0.85rem', fontWeight: '700', color: isSuperadmin ? 'var(--accent-amber)' : 'var(--text-main)' }}>
+                  {currentUser.name}
+                </span>
+                {isSuperadmin && (
+                  <span style={{ fontSize: '0.62rem', fontWeight: '800', color: 'var(--accent-amber)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                    Super Admin
+                  </span>
+                )}
+              </div>
             </div>
 
             {showUserDropdown && (
@@ -187,7 +207,7 @@ export default function Header({
                   position: 'absolute',
                   top: '120%',
                   right: 0,
-                  width: '200px',
+                  width: '210px',
                   background: 'var(--bg-card)',
                   border: '1px solid var(--border-color)',
                   borderRadius: 'var(--radius-sm)',
@@ -199,7 +219,9 @@ export default function Header({
                 <div style={{ padding: '0.4rem 0.2rem 0.6rem', borderBottom: '1px solid var(--border-color)', marginBottom: '0.4rem' }}>
                   <div style={{ fontWeight: '700', fontSize: '0.85rem', color: 'var(--text-main)' }}>{currentUser.name}</div>
                   <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{currentUser.email}</div>
-                  <span className="badge badge-priority-medium" style={{ marginTop: '0.4rem', fontSize: '0.65rem' }}>{currentUser.role || 'Member'}</span>
+                  <span className={`badge ${isSuperadmin ? 'badge-priority-critical' : 'badge-priority-medium'}`} style={{ marginTop: '0.4rem', fontSize: '0.65rem' }}>
+                    {currentUser.role || 'Member'}
+                  </span>
                 </div>
                 <button
                   className="btn btn-danger"

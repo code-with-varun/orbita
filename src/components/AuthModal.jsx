@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
-import { LogIn, UserPlus, Orbit } from 'lucide-react';
+import { LogIn, UserPlus, Orbit, ShieldCheck } from 'lucide-react';
 
 export default function AuthModal({ isOpen, onClose, onLoginSuccess }) {
   const [isRegister, setIsRegister] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
-  const [role, setRole] = useState('Admin');
+  const [role, setRole] = useState('Member');
   const [errorMsg, setErrorMsg] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -42,6 +42,13 @@ export default function AuthModal({ isOpen, onClose, onLoginSuccess }) {
         setLoading(false);
         setErrorMsg(err.message || 'Connection error. Please try again.');
       });
+  };
+
+  const handleFillSuperadmin = () => {
+    setIsRegister(false);
+    setEmail('superadmin@orbita.com');
+    setPassword('superadmin123');
+    setErrorMsg('');
   };
 
   if (!isOpen) return null;
@@ -164,11 +171,11 @@ export default function AuthModal({ isOpen, onClose, onLoginSuccess }) {
             <div className="form-group">
               <label className="form-label">Role</label>
               <select className="form-select" value={role} onChange={(e) => setRole(e.target.value)}>
-                <option value="Admin">Admin</option>
-                <option value="Founder / Lead">Founder / Lead</option>
+                <option value="Member">Member</option>
                 <option value="Developer">Developer</option>
                 <option value="Designer">Designer</option>
                 <option value="Product Manager">Product Manager</option>
+                <option value="Founder / Lead">Founder / Lead</option>
               </select>
             </div>
           )}
@@ -183,7 +190,20 @@ export default function AuthModal({ isOpen, onClose, onLoginSuccess }) {
           </button>
         </form>
 
-        <div style={{ textAlign: 'center', marginTop: '1.5rem', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+        {/* Superadmin Quick Access */}
+        <div style={{ marginTop: '1.25rem', paddingTop: '1rem', borderTop: '1px solid var(--border-color)', textAlign: 'center' }}>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={handleFillSuperadmin}
+            style={{ width: '100%', justifyContent: 'center', fontSize: '0.78rem', color: 'var(--accent-amber)' }}
+            title="Pre-fill default Super Admin credentials"
+          >
+            <ShieldCheck size={14} /> Use Super Admin (superadmin@orbita.com)
+          </button>
+        </div>
+
+        <div style={{ textAlign: 'center', marginTop: '1rem', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
           {isRegister ? 'Already have an account?' : "Don't have an account yet?"}{' '}
           <button
             type="button"

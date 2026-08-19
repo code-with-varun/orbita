@@ -120,15 +120,31 @@ export default function App() {
   };
 
   const handleResetDatabase = () => {
-    fetch('/api/system/reset', { method: 'POST' })
-      .then((res) => res.json())
+    if (!currentUser || currentUser.role !== 'Superadmin') {
+      showToast('Access Denied: Only a Super Admin can reset the system.', 'danger');
+      return;
+    }
+
+    fetch('/api/system/reset', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        user_email: currentUser.email,
+        user_role: currentUser.role,
+        user_name: currentUser.name
+      })
+    })
+      .then((res) => {
+        if (!res.ok) {
+          return res.json().then((d) => Promise.reject(new Error(d.error || 'Failed to reset')));
+        }
+        return res.json();
+      })
       .then((data) => {
-        localStorage.removeItem('orbita_user');
-        setCurrentUser(null);
-        showToast('Database wiped completely clean (0 users, 0 items)!', 'success');
+        showToast(data.message || 'System reset to fresh setup by Super Admin!', 'success');
         refreshAll();
       })
-      .catch((err) => showToast(err.error || 'Failed to reset', 'danger'));
+      .catch((err) => showToast(err.message || 'Failed to reset', 'danger'));
   };
 
   // Star Toggle

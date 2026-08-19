@@ -15,10 +15,21 @@ export async function connectDb() {
       serverSelectionTimeoutMS: 8000,
     });
     console.log('Connected to MongoDB Atlas successfully (orbita database)');
+    await ensureSuperadmin();
   } catch (err) {
     console.error('MongoDB Atlas connection error:', err.message);
   }
 }
+
+// -------------------------------------------------------------
+// DEFAULT SUPERADMIN ACCOUNT
+// -------------------------------------------------------------
+export const DEFAULT_SUPERADMIN = {
+  name: 'Super Admin',
+  email: 'superadmin@orbita.com',
+  password_hash: 'superadmin123',
+  role: 'Superadmin'
+};
 
 // -------------------------------------------------------------
 // SCHEMAS & MODELS
@@ -29,7 +40,7 @@ const UserSchema = new mongoose.Schema({
   name: { type: String, required: true },
   email: { type: String, required: true, unique: true, lowercase: true, trim: true },
   password_hash: { type: String, required: true },
-  role: { type: String, default: 'Member' },
+  role: { type: String, default: 'Member', enum: ['Member', 'Admin', 'Superadmin'] },
   createdAt: { type: Date, default: Date.now }
 });
 
@@ -128,12 +139,36 @@ export const Task = mongoose.model('Task', TaskSchema);
 export const TimeSession = mongoose.model('TimeSession', TimeSessionSchema);
 export const AuditLog = mongoose.model('AuditLog', AuditLogSchema);
 
-export async function cleanResetDatabase() {
+export async function ensureSuperadmin() {
+  try {
+    const existing = await User.findOne({ email: DEFAULT_SUPERADMIN.email });
+    if (!existing) {
+      await User.create(DEFAULT_SUPERADMIN);
+      console.log('Default Superadmin account created: superadmin@orbita.com / superadmin123');
+    } else if (existing.role !== 'Superadmin') {
+      existing.role = 'Superadmin';
+      await existing.save();
+    }
+  } catch (err) {
+    console.error('Error ensuring superadmin account:', err.message);
+  }
+}
+
+export async function cleanResetDatabase(initiatedBy = 'Super Admin') {
   await Promise.all([
-    User.deleteMany({}),
+    User.deleteMany({ role: { $ne: 'Superadmin' } }),
     Task.deleteMany({}),
     TimeSession.deleteMany({}),
     AuditLog.deleteMany({})
   ]);
-  console.log('MongoDB Atlas database wiped clean (0 users, 0 items)!');
+
+  await ensureSuperadmin();
+
+  await AuditLog.create({
+    user_name: initiatedBy,
+    action: 'System Reset',
+    details: 'Superadmin performed a full system reset. Fresh setup ready for users.'
+  });
+
+  console.log('MongoDB Atlas database reset to fresh setup (Superadmin preserved, 0 items)!');
 }

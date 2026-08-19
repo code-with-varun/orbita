@@ -26,13 +26,27 @@ app.use(express.json());
 await connectDb();
 
 // -------------------------------------------------------------
-// SYSTEM RESET
+// SYSTEM RESET (SUPERADMIN ONLY)
 // -------------------------------------------------------------
 
 app.post('/api/system/reset', async (req, res) => {
   try {
-    await cleanResetDatabase();
-    res.json({ message: 'Database wiped completely clean (0 users, 0 items) in MongoDB Atlas!' });
+    const { user_email, user_role, user_name } = req.body;
+
+    if (user_email) {
+      const user = await User.findOne({ email: user_email.toLowerCase().trim() });
+      if (!user || user.role !== 'Superadmin') {
+        return res.status(403).json({ error: 'Access Denied: Only a Super Admin can reset the system.' });
+      }
+    } else if (user_role && user_role !== 'Superadmin') {
+      return res.status(403).json({ error: 'Access Denied: Only a Super Admin can reset the system.' });
+    }
+
+    await cleanResetDatabase(user_name || 'Super Admin');
+    res.json({
+      message: 'Fresh setup complete! System reset to initial state with Super Admin preserved.',
+      superadmin: 'superadmin@orbita.com'
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
