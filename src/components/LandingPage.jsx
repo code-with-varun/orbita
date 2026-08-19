@@ -25,7 +25,7 @@ import {
   BarChart3,
   Briefcase
 } from 'lucide-react';
-import OrbitaLogo, { OrbitaIcon } from './OrbitaLogo';
+import OrbitaLogo, { OrbitaIcon, OrbitaHorizontalLockup } from './OrbitaLogo';
 
 export default function LandingPage({
   onOpenAuth,
@@ -347,7 +347,7 @@ export default function LandingPage({
               Multi-Stage Delivery
             </div>
             <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', lineHeight: 1.6, flex: 1 }}>
-              Structured, multistep deliverables with Stage -> Task hierarchy. Manage stages with collapsible accordions, task-level focus timers, and calculated completion percentages.
+              Structured, multistep deliverables with Stage and Task hierarchy. Manage stages with collapsible accordions, task-level focus timers, and calculated completion percentages.
             </p>
           </div>
 
