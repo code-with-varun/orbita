@@ -1,0 +1,225 @@
+import React, { useState, useEffect } from 'react';
+import {
+  Plus,
+  Square,
+  Search,
+  User,
+  LogOut,
+  Moon,
+  Sun,
+  RotateCcw,
+  Briefcase,
+  UserCheck
+} from 'lucide-react';
+
+function LiveTimerBadge({ runningTask, onStopTimer }) {
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+
+  useEffect(() => {
+    if (!runningTask?.timer_started_at) return;
+
+    const calculateElapsed = () => {
+      const startMs = new Date(runningTask.timer_started_at).getTime();
+      const nowMs = Date.now();
+      const diff = Math.max(0, Math.floor((nowMs - startMs) / 1000));
+      setElapsedSeconds(diff);
+    };
+
+    calculateElapsed();
+    const interval = setInterval(calculateElapsed, 1000);
+    return () => clearInterval(interval);
+  }, [runningTask?.timer_started_at]);
+
+  const formatTime = (totalSec) => {
+    const hrs = Math.floor(totalSec / 3600);
+    const mins = Math.floor((totalSec % 3600) / 60);
+    const secs = totalSec % 60;
+    return `${hrs > 0 ? String(hrs).padStart(2, '0') + ':' : ''}${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+  };
+
+  return (
+    <div className="running-timer-badge" style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+      <div
+        style={{
+          width: '8px',
+          height: '8px',
+          borderRadius: '50%',
+          background: '#ef4444',
+          boxShadow: '0 0 8px #ef4444'
+        }}
+      />
+      <span style={{ fontWeight: '800', color: 'var(--accent-red)', fontFamily: 'monospace', fontSize: '0.9rem' }}>
+        {formatTime(elapsedSeconds)}
+      </span>
+      <span style={{ maxWidth: '130px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: '0.8rem' }}>
+        {runningTask.ticket_key}: {runningTask.title}
+      </span>
+      <button
+        onClick={() => onStopTimer(runningTask.id)}
+        className="btn btn-danger"
+        style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem', borderRadius: '12px' }}
+        title="Stop Focus Timer"
+      >
+        <Square size={10} /> Stop
+      </button>
+    </div>
+  );
+}
+
+export default function Header({
+  runningTask,
+  onStopTimer,
+  onOpenTaskModal,
+  onOpenAuthModal,
+  currentUser,
+  onLogout,
+  theme,
+  onToggleTheme,
+  searchTerm,
+  setSearchTerm,
+  workspaceFilter,
+  setWorkspaceFilter,
+  onResetDatabase
+}) {
+  const [showUserDropdown, setShowUserDropdown] = useState(false);
+
+  const handleResetClick = () => {
+    if (window.confirm('Wipe database to completely clean blank state (0 users, 0 items)?')) {
+      if (onResetDatabase) {
+        onResetDatabase();
+      }
+    }
+  };
+
+  return (
+    <header className="header">
+      {/* Search Input & Workspace Filter */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flex: 1, maxWidth: '550px' }}>
+        <div className="search-bar" style={{ flex: 1 }}>
+          <Search size={16} color="var(--text-dim)" />
+          <input
+            type="text"
+            placeholder="Search tasks, routines, goals, projects, tags..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+        </div>
+
+        {/* 2-Way Workspace Switcher */}
+        <div style={{ display: 'flex', background: 'var(--bg-card-hover)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', padding: '0.2rem' }}>
+          <button
+            type="button"
+            className={`btn ${workspaceFilter === 'All' ? 'btn-primary' : 'btn-secondary'}`}
+            style={{ padding: '0.25rem 0.6rem', fontSize: '0.75rem', border: 'none' }}
+            onClick={() => setWorkspaceFilter('All')}
+          >
+            All
+          </button>
+          <button
+            type="button"
+            className={`btn ${workspaceFilter === 'Personal' ? 'btn-primary' : 'btn-secondary'}`}
+            style={{ padding: '0.25rem 0.6rem', fontSize: '0.75rem', border: 'none' }}
+            onClick={() => setWorkspaceFilter('Personal')}
+          >
+            Personal
+          </button>
+          <button
+            type="button"
+            className={`btn ${workspaceFilter === 'Work' ? 'btn-primary' : 'btn-secondary'}`}
+            style={{ padding: '0.25rem 0.6rem', fontSize: '0.75rem', border: 'none' }}
+            onClick={() => setWorkspaceFilter('Work')}
+          >
+            Work
+          </button>
+        </div>
+      </div>
+
+      {/* Actions */}
+      <div className="header-actions">
+        {/* Active Live Ticking Stopwatch Badge */}
+        {runningTask && (
+          <LiveTimerBadge runningTask={runningTask} onStopTimer={onStopTimer} />
+        )}
+
+        {/* Reset System Button */}
+        <button
+          className="btn btn-secondary"
+          onClick={handleResetClick}
+          title="Reset database to 100% clean blank state"
+          style={{ fontSize: '0.8rem', padding: '0.45rem 0.8rem' }}
+        >
+          <RotateCcw size={14} /> Reset
+        </button>
+
+        {/* Theme Toggle Button */}
+        <button
+          className="btn btn-secondary"
+          onClick={onToggleTheme}
+          title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+          style={{ padding: '0.5rem' }}
+        >
+          {theme === 'dark' ? <Sun size={16} color="var(--accent-amber)" /> : <Moon size={16} color="var(--accent-blue)" />}
+        </button>
+
+        {/* Global New Item Button */}
+        <button className="btn btn-primary" onClick={onOpenTaskModal}>
+          <Plus size={16} /> New Item
+        </button>
+
+        {/* User Profile Badge */}
+        {currentUser ? (
+          <div style={{ position: 'relative' }}>
+            <div
+              className="user-badge-header"
+              onClick={() => setShowUserDropdown(!showUserDropdown)}
+            >
+              <div className="user-avatar">
+                {currentUser.name ? currentUser.name.substring(0, 2).toUpperCase() : 'U'}
+              </div>
+              <span style={{ fontSize: '0.85rem', fontWeight: '600' }}>
+                {currentUser.name}
+              </span>
+            </div>
+
+            {showUserDropdown && (
+              <div
+                style={{
+                  position: 'absolute',
+                  top: '120%',
+                  right: 0,
+                  width: '200px',
+                  background: 'var(--bg-card)',
+                  border: '1px solid var(--border-color)',
+                  borderRadius: 'var(--radius-sm)',
+                  boxShadow: '0 10px 25px rgba(0,0,0,0.2)',
+                  padding: '0.65rem',
+                  zIndex: 200
+                }}
+              >
+                <div style={{ padding: '0.4rem 0.2rem 0.6rem', borderBottom: '1px solid var(--border-color)', marginBottom: '0.4rem' }}>
+                  <div style={{ fontWeight: '700', fontSize: '0.85rem', color: 'var(--text-main)' }}>{currentUser.name}</div>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{currentUser.email}</div>
+                  <span className="badge badge-priority-medium" style={{ marginTop: '0.4rem', fontSize: '0.65rem' }}>{currentUser.role || 'Member'}</span>
+                </div>
+                <button
+                  className="btn btn-danger"
+                  style={{ width: '100%', padding: '0.4rem 0.6rem', fontSize: '0.8rem', justifyContent: 'center' }}
+                  onClick={() => {
+                    setShowUserDropdown(false);
+                    onLogout();
+                  }}
+                >
+                  <LogOut size={13} /> Sign Out
+                </button>
+              </div>
+            )}
+          </div>
+        ) : (
+          <button className="btn btn-secondary" onClick={onOpenAuthModal}>
+            <User size={16} /> Sign In
+          </button>
+        )}
+      </div>
+    </header>
+  );
+}
