@@ -151,6 +151,22 @@ function buildUserFilter(req, entityType = 'task') {
   return {};
 }
 
+// Helper to generate unique sequential ticket keys with zero collision
+async function getNextTicketKey(prefix = 'TSK') {
+  const latest = await Task.findOne({ ticket_key: new RegExp(`^${prefix}-\\d+$`) }).sort({ _id: -1 });
+  let nextNum = 1;
+  if (latest && latest.ticket_key) {
+    const parts = latest.ticket_key.split('-');
+    if (parts.length === 2 && !isNaN(parseInt(parts[1], 10))) {
+      nextNum = parseInt(parts[1], 10) + 1;
+    }
+  }
+  while (await Task.findOne({ ticket_key: `${prefix}-${String(nextNum).padStart(3, '0')}` })) {
+    nextNum++;
+  }
+  return `${prefix}-${String(nextNum).padStart(3, '0')}`;
+}
+
 // -------------------------------------------------------------
 // ROUTINE AUTO-OCCURRENCE ENGINE
 // Automatically evaluates recurring routines and creates actionable
@@ -228,9 +244,8 @@ async function generateRoutineOccurrences(userFilter = {}) {
           });
 
           if (!existing) {
-            // Create a discrete Task instance for this occurrence
-            const allTasksCount = await Task.countDocuments({ orbita_type: 'Task' });
-            const ticket_key = `TSK-${String(allTasksCount + 1).padStart(3, '0')}`;
+            // Generate distinct collision-free ticket key
+            const ticket_key = await getNextTicketKey('TSK');
 
             await Task.create({
               ticket_key,
@@ -435,8 +450,7 @@ app.post('/api/tasks', async (req, res) => {
     else if (orbita_type === 'Goal') prefix = 'GOL';
     else if (orbita_type === 'Project') prefix = 'PRJ';
 
-    const count = await Task.countDocuments({ orbita_type });
-    const ticket_key = `${prefix}-${String(count + 1).padStart(3, '0')}`;
+    const ticket_key = await getNextTicketKey(prefix);
 
     const isTimerAllowed = orbita_type === 'Goal' || orbita_type === 'Project';
 
@@ -559,6 +573,27 @@ app.put('/api/tasks/:id', async (req, res) => {
 
     if (updates.priority !== undefined) {
       task.priority = updates.priority;
+      if (updates.priority === 'Critical') {
+        task.priority_quadrant = 'Q1';
+        task.is_urgent = true;
+        task.is_important = true;
+      } else if (updates.priority === 'High') {
+        task.priority_quadrant = 'Q2';
+        task.is_urgent = false;
+        task.is_important = true;
+      } else if (updates.priority === 'Medium') {
+        task.priority_quadrant = 'Q3';
+        task.is_urgent = true;
+        task.is_important = false;
+      } else if (updates.priority === 'Low') {
+        task.priority_quadrant = 'Q4';
+        task.is_urgent = false;
+        task.is_important = false;
+      }
+    }
+
+    if (updates.priority_quadrant !== undefined) {
+      task.priority_quadrant = updates.priority_quadrant;
     }
 
     if (task.status === 'Completed' && prevStatus !== 'Completed') {
@@ -1005,6 +1040,9 @@ app.post('/api/tasks/:id/timer/stop', async (req, res) => {
     task.actual_hours = Math.round(((task.actual_hours || 0) + durationHours) * 100) / 100;
     await task.save();
 
+    // Ensure all running timers across all goals and tasks are stopped
+    await autoStopAnyRunningTimer();
+
     await AuditLog.create({
       task_id: task._id,
       user_id: task.user_id || req.body.user_id || null,
@@ -1208,6 +1246,9 @@ app.post('/api/projects/:id/stages/:stageId/tasks/:taskId/timer/stop', async (re
 
     await project.save();
 
+    // Ensure all running timers across the system are stopped
+    await autoStopAnyRunningTimer();
+
     await AuditLog.create({
       task_id: project._id,
       user_id: project.user_id || req.body.user_id || null,
@@ -1270,7 +1311,7 @@ app.get('/api/matrix', async (req, res) => {
     await generateRoutineOccurrences(userFilter);
 
     const { workspace } = req.query;
-    const query = { ...userFilter, status: { $ne: 'Completed' } };
+    const query = { ...userFilter, orbita_type: { $ne: 'Routine' }, status: { $ne: 'Completed' } };
     if (workspace && workspace !== 'All') {
       query.workspace = new RegExp(`^${workspace}$`, 'i');
     }
@@ -1283,10 +1324,10 @@ app.get('/api/matrix', async (req, res) => {
       const t = doc.toObject();
       t.id = t._id.toString();
 
-      // Top level item (Task, Routine, Goal, or whole Project)
-      if (t.orbita_type !== 'Project') {
+      // Top level item (Task, Goal, or whole Project)
+      if (t.orbita_type !== 'Project' && t.orbita_type !== 'Routine') {
         matrixItems.push(t);
-      } else {
+      } else if (t.orbita_type === 'Project') {
         // For Projects: include individual active stage tasks!
         if (t.stages && t.stages.length > 0) {
           t.stages.forEach((st) => {

@@ -174,7 +174,7 @@ export default function TodoView({
               >
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', flex: 1 }}>
-                    {/* Left Icon: If Project -> Collapse / Expand Stages; Else -> 1-Click Complete Toggle */}
+                    {/* Left Icon: If Project -> Collapse / Expand Stages; If Routine -> Perpetual Icon; Else -> 1-Click Complete Toggle */}
                     {isProject ? (
                       <button
                         onClick={() => toggleExpand(task.id)}
@@ -189,6 +189,19 @@ export default function TodoView({
                       >
                         {isExpanded ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
                       </button>
+                    ) : task.orbita_type === 'Routine' ? (
+                      <div
+                        style={{
+                          padding: '0.25rem',
+                          color: 'var(--accent-purple)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center'
+                        }}
+                        title="Recurring Routine Definition (Perpetual Template)"
+                      >
+                        <Repeat size={20} />
+                      </div>
                     ) : (
                       <button
                         onClick={() => onUpdateTaskStatus(task.id, isDone ? 'Active' : 'Completed')}
@@ -210,7 +223,7 @@ export default function TodoView({
                             fontSize: '0.95rem',
                             fontWeight: '700',
                             color: 'var(--text-main)',
-                            textDecoration: isDone && !isProject ? 'line-through' : 'none'
+                            textDecoration: isDone && !isProject && task.orbita_type !== 'Routine' ? 'line-through' : 'none'
                           }}
                         >
                           {task.title}
@@ -268,7 +281,7 @@ export default function TodoView({
                         )}
 
                         {task.orbita_type === 'Goal' && (
-                          <span>Focus: <strong style={{ color: 'var(--accent-amber)' }}>{task.actual_hours || 0}h / {task.target_hours || 0}h target</strong></span>
+                          <span>Logged Focus: <strong style={{ color: 'var(--accent-amber)' }}>{task.actual_hours || 0}h</strong></span>
                         )}
 
                         {isProject && (

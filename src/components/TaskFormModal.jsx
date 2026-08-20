@@ -335,23 +335,13 @@ export default function TaskFormModal({ isOpen, onClose, onRefresh, currentUser,
           )}
 
           {orbitaType === 'Goal' && (
-            <div className="glass-card" style={{ marginBottom: '1.25rem', padding: '0.85rem' }}>
-              <label className="form-label" style={{ fontWeight: '700', marginBottom: '0.5rem' }}>
-                <Clock size={14} color="var(--accent-amber)" /> Goal Target Hours
-              </label>
-              <div className="form-row">
-                <div>
-                  <label className="form-label" style={{ fontSize: '0.75rem' }}>Target Focus Effort (Hours)</label>
-                  <input
-                    type="number"
-                    step="0.5"
-                    className="form-input"
-                    placeholder="e.g. 20 hours"
-                    value={targetHours}
-                    onChange={(e) => setTargetHours(e.target.value)}
-                  />
-                </div>
+            <div className="glass-card" style={{ marginBottom: '1.25rem', padding: '0.85rem', background: 'rgba(245, 158, 11, 0.05)', border: '1px solid rgba(245, 158, 11, 0.2)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.35rem', color: 'var(--accent-amber)', fontWeight: '700', fontSize: '0.85rem' }}>
+                <Clock size={16} /> Focus Goal Track
               </div>
+              <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', margin: 0 }}>
+                This goal is a dedicated focus track. You can start, pause, and log focus stopwatch sessions anytime.
+              </p>
             </div>
           )}
 

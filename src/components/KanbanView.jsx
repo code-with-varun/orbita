@@ -23,20 +23,21 @@ export default function KanbanView({
   ];
 
   const filteredTasks = tasks.filter((t) => {
+    // Master routines appear only in the Routines page; their generated actionable tasks appear here
+    if (t.orbita_type === 'Routine') return false;
     if (filterType && t.orbita_type !== filterType) return false;
     if (filterWorkspace && t.workspace !== filterWorkspace) return false;
     return true;
   });
 
   const getTypeIcon = (type) => {
-    if (type === 'Routine') return <Repeat size={12} color="var(--accent-purple)" />;
     if (type === 'Goal') return <Target size={12} color="var(--accent-amber)" />;
     if (type === 'Project') return <FolderGit2 size={12} color="var(--accent-blue)" />;
     return <CheckSquare size={12} color="var(--accent-green)" />;
   };
 
   const isDraggableTask = (task) => {
-    return task.orbita_type === 'Task' || task.orbita_type === 'Routine';
+    return task.orbita_type === 'Task';
   };
 
   const handleDragStart = (e, task) => {

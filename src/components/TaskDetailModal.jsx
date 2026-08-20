@@ -439,15 +439,28 @@ export default function TaskDetailModal({
                   <option value="Work">Work</option>
                 </select>
               </div>
+
               <div className="form-group">
-                <label className="form-label">Status</label>
-                <select className="form-select" value={editStatus} onChange={(e) => setEditStatus(e.target.value)}>
-                  <option value="Active">Active</option>
-                  <option value="In Progress">In Progress</option>
-                  <option value="Paused">Paused</option>
-                  <option value="Completed">Completed</option>
+                <label className="form-label">Priority (Eisenhower Quadrant)</label>
+                <select className="form-select" value={editPriority} onChange={(e) => setEditPriority(e.target.value)}>
+                  <option value="Critical">Critical (Q1: Do Now)</option>
+                  <option value="High">High (Q2: Plan & Schedule)</option>
+                  <option value="Medium">Medium (Q3: Quick Action)</option>
+                  <option value="Low">Low (Q4: Optional)</option>
                 </select>
               </div>
+
+              {task.orbita_type !== 'Routine' && (
+                <div className="form-group">
+                  <label className="form-label">Status</label>
+                  <select className="form-select" value={editStatus} onChange={(e) => setEditStatus(e.target.value)}>
+                    <option value="Active">Active</option>
+                    <option value="In Progress">In Progress</option>
+                    <option value="Paused">Paused</option>
+                    <option value="Completed">Completed</option>
+                  </select>
+                </div>
+              )}
             </div>
 
             <div className="form-group">
@@ -455,25 +468,27 @@ export default function TaskDetailModal({
               <input type="text" className="form-input" value={editAssignee} onChange={(e) => setEditAssignee(e.target.value)} />
             </div>
 
-            <div className="form-row">
-              <div className="form-group">
-                <label className="form-label">Scheduled Date</label>
-                <input type="date" className="form-input" value={editScheduledDate} onChange={(e) => setEditScheduledDate(e.target.value)} />
+            {task.orbita_type !== 'Routine' && (
+              <div className="form-row">
+                <div className="form-group">
+                  <label className="form-label">Scheduled Date</label>
+                  <input type="date" className="form-input" value={editScheduledDate} onChange={(e) => setEditScheduledDate(e.target.value)} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Due Date</label>
+                  <input type="date" className="form-input" value={editDueDate} onChange={(e) => setEditDueDate(e.target.value)} />
+                </div>
               </div>
-              <div className="form-group">
-                <label className="form-label">Due Date</label>
-                <input type="date" className="form-input" value={editDueDate} onChange={(e) => setEditDueDate(e.target.value)} />
-              </div>
-            </div>
+            )}
 
             {task.orbita_type === 'Goal' && (
               <div className="form-group">
-                <label className="form-label">Target Focus Hours</label>
+                <label className="form-label">Optional Target Hours (Leave 0 for open focus track)</label>
                 <input type="number" step="0.5" className="form-input" value={editTargetHours} onChange={(e) => setEditTargetHours(e.target.value)} />
               </div>
             )}
 
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '1rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '1.25rem' }}>
               <button type="button" className="btn btn-secondary" onClick={() => setActiveTab('overview')}>
                 Cancel
               </button>
