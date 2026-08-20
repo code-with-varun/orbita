@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
 import { ChevronLeft, ChevronRight, Plus, Star, Repeat, Target, FolderGit2, CheckSquare } from 'lucide-react';
+import { CalendarSkeleton } from './SkeletonLoader';
 
 export default function CalendarView({
   tasks,
+  loading = false,
   onSelectTask,
   onCreateOnDate,
   onToggleStar
@@ -85,9 +87,12 @@ export default function CalendarView({
         </div>
       </div>
 
-      <div className="calendar-grid">
-        {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => (
-          <div key={d} className="calendar-day-header">
+      {loading ? (
+        <CalendarSkeleton />
+      ) : (
+        <div className="calendar-grid">
+          {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => (
+            <div key={d} className="calendar-day-header">
             {d}
           </div>
         ))}
@@ -162,6 +167,7 @@ export default function CalendarView({
           );
         })}
       </div>
+      )}
     </div>
   );
 }

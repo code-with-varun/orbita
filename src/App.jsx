@@ -329,6 +329,7 @@ export default function App() {
             description="One-time simple completion tasks (e.g. Buy groceries, search document)"
             typeFilterDefault="Task"
             tasks={tasks}
+            loading={loading}
             onUpdateTaskStatus={handleUpdateTaskStatus}
             onSelectTask={(id) => setSelectedTaskId(id)}
             onStartTimer={handleStartTimer}
@@ -346,6 +347,7 @@ export default function App() {
             description="Automated recurring activities (e.g. Weekly meeting, electricity bill, nth day of month)"
             typeFilterDefault="Routine"
             tasks={tasks}
+            loading={loading}
             onUpdateTaskStatus={handleUpdateTaskStatus}
             onSelectTask={(id) => setSelectedTaskId(id)}
             onStartTimer={handleStartTimer}
@@ -363,6 +365,7 @@ export default function App() {
             description="Ongoing focus goals tracked with stopwatch sessions and hours targets (e.g. Learning JavaScript, YouTube content)"
             typeFilterDefault="Goal"
             tasks={tasks}
+            loading={loading}
             onUpdateTaskStatus={handleUpdateTaskStatus}
             onSelectTask={(id) => setSelectedTaskId(id)}
             onStartTimer={handleStartTimer}
@@ -380,6 +383,7 @@ export default function App() {
             description="Structured execution with Stage -> Task hierarchy (e.g. Building CRM app, MERN project, Website)"
             typeFilterDefault="Project"
             tasks={tasks}
+            loading={loading}
             onUpdateTaskStatus={handleUpdateTaskStatus}
             onSelectTask={(id) => setSelectedTaskId(id)}
             onStartTimer={handleStartTimer}
@@ -420,6 +424,7 @@ export default function App() {
         {activeView === 'grid' && (
           <TicketGridView
             tasks={tasks}
+            loading={loading}
             onSelectTask={(id) => setSelectedTaskId(id)}
             onUpdateTaskStatus={handleUpdateTaskStatus}
             onDeleteTask={handleDeleteTask}
@@ -432,6 +437,7 @@ export default function App() {
         {activeView === 'kanban' && (
           <KanbanView
             tasks={tasks}
+            loading={loading}
             onUpdateTaskStatus={handleUpdateTaskStatus}
             onSelectTask={(id) => setSelectedTaskId(id)}
             onStartTimer={handleStartTimer}
@@ -443,6 +449,7 @@ export default function App() {
         {activeView === 'calendar' && (
           <CalendarView
             tasks={tasks}
+            loading={loading}
             onSelectTask={(id) => setSelectedTaskId(id)}
             onStartTimer={handleStartTimer}
             onToggleStar={handleToggleStar}

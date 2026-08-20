@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { ArrowUpDown, Play, ArrowUpRight, Trash2, ArrowUp, ArrowDown, Star, Download, FileSpreadsheet, FileCode } from 'lucide-react';
 import { exportToCsv, exportToJson } from '../utils/exportUtils';
+import { TableSkeleton } from './SkeletonLoader';
 
-export default function TicketGridView({ tasks, onSelectTask, onUpdateTaskStatus, onDeleteTask, onStartTimer, onToggleStar }) {
+export default function TicketGridView({ tasks, loading = false, onSelectTask, onUpdateTaskStatus, onDeleteTask, onStartTimer, onToggleStar }) {
   const [filterType, setFilterType] = useState('');
   const [filterWorkspace, setFilterWorkspace] = useState('');
   const [filterPriority, setFilterPriority] = useState('');
@@ -121,13 +122,16 @@ export default function TicketGridView({ tasks, onSelectTask, onUpdateTaskStatus
         </select>
       </div>
 
-      <div className="data-table-wrapper">
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th onClick={() => handleSort('ticket_key')} style={{ cursor: 'pointer' }}>
-                ID {renderSortIcon('ticket_key')}
-              </th>
+      {loading ? (
+        <TableSkeleton rows={8} />
+      ) : (
+        <div className="data-table-wrapper">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th onClick={() => handleSort('ticket_key')} style={{ cursor: 'pointer' }}>
+                  ID {renderSortIcon('ticket_key')}
+                </th>
               <th onClick={() => handleSort('title')} style={{ cursor: 'pointer' }}>
                 Title {renderSortIcon('title')}
               </th>
@@ -259,6 +263,7 @@ export default function TicketGridView({ tasks, onSelectTask, onUpdateTaskStatus
           </tbody>
         </table>
       </div>
+      )}
     </div>
   );
 }

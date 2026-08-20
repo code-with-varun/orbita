@@ -11,9 +11,10 @@ import {
   FolderGit2,
   CheckSquare
 } from 'lucide-react';
+import { DashboardSkeleton } from './SkeletonLoader';
 
 export default function DashboardView({ stats, onSelectTask, setActiveView }) {
-  if (!stats) return <div className="content-area">Loading executive dashboard...</div>;
+  if (!stats) return <DashboardSkeleton />;
 
   return (
     <div className="content-area">

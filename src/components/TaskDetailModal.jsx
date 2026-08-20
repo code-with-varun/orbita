@@ -46,6 +46,18 @@ export default function TaskDetailModal({
   const [editDueDate, setEditDueDate] = useState('');
   const [editTargetHours, setEditTargetHours] = useState(0);
 
+  // Routine Specific (Recurrence Edit State)
+  const [editRecurrenceType, setEditRecurrenceType] = useState('Monthly');
+  const [editRecurrenceInterval, setEditRecurrenceInterval] = useState(1);
+  const [editDailyOption, setEditDailyOption] = useState('every_day');
+  const [editWeeklyDays, setEditWeeklyDays] = useState(['Mon']);
+  const [editMonthlyMode, setEditMonthlyMode] = useState('day_of_month');
+  const [editMonthlyDay, setEditMonthlyDay] = useState('1');
+  const [editMonthlyOrdinalPos, setEditMonthlyOrdinalPos] = useState('1');
+  const [editMonthlyOrdinalDay, setEditMonthlyOrdinalDay] = useState('mon');
+  const [editYearlyMonth, setEditYearlyMonth] = useState(1);
+  const [editYearlyDay, setEditYearlyDay] = useState(1);
+
   const fetchTaskDetails = () => {
     if (!taskId) return;
     fetch(`/api/tasks/${taskId}`)
@@ -62,6 +74,43 @@ export default function TaskDetailModal({
         setEditScheduledDate(data.scheduled_date || '');
         setEditDueDate(data.due_date || '');
         setEditTargetHours(data.target_hours || 0);
+
+        if (data.orbita_type === 'Routine') {
+          const recT = data.recurrence_type || 'Monthly';
+          setEditRecurrenceType(recT);
+          setEditRecurrenceInterval(data.recurrence_interval || 1);
+          const rDay = (data.recurrence_day || '').trim();
+
+          if (recT === 'Daily') {
+            if (rDay === 'weekdays') setEditDailyOption('weekdays');
+            else if (rDay === 'weekends') setEditDailyOption('weekends');
+            else if (data.recurrence_interval > 1) setEditDailyOption('every_n_days');
+            else setEditDailyOption('every_day');
+          } else if (recT === 'Weekly') {
+            if (rDay) {
+              setEditWeeklyDays(rDay.split(',').map((s) => s.trim()));
+            } else {
+              setEditWeeklyDays(['Mon']);
+            }
+          } else if (recT === 'Monthly') {
+            if (rDay.startsWith('ordinal_')) {
+              setEditMonthlyMode('ordinal');
+              const p = rDay.split('_');
+              setEditMonthlyOrdinalPos(p[1] || '1');
+              setEditMonthlyOrdinalDay(p[2] || 'mon');
+            } else {
+              setEditMonthlyMode('day_of_month');
+              setEditMonthlyDay(rDay || '1');
+            }
+          } else if (recT === 'Yearly') {
+            if (rDay.includes('-')) {
+              const p = rDay.split('-');
+              setEditYearlyMonth(parseInt(p[0], 10) || 1);
+              setEditYearlyDay(parseInt(p[1], 10) || 1);
+            }
+          }
+        }
+
         if (data.stages?.length > 0) {
           setSelectedStageId(data.stages[0].id);
         }
@@ -143,6 +192,37 @@ export default function TaskDetailModal({
 
   const handleSaveEdit = (e) => {
     e.preventDefault();
+
+    let finalRecurrenceDay = null;
+    let finalRecurrenceInterval = parseInt(editRecurrenceInterval) || 1;
+
+    if (task.orbita_type === 'Routine') {
+      if (editRecurrenceType === 'Daily') {
+        if (editDailyOption === 'weekdays') finalRecurrenceDay = 'weekdays';
+        else if (editDailyOption === 'weekends') finalRecurrenceDay = 'weekends';
+        else if (editDailyOption === 'every_n_days') {
+          finalRecurrenceDay = '';
+          finalRecurrenceInterval = Math.max(1, parseInt(editRecurrenceInterval) || 1);
+        } else {
+          finalRecurrenceDay = '';
+          finalRecurrenceInterval = 1;
+        }
+      } else if (editRecurrenceType === 'Weekly') {
+        finalRecurrenceDay = editWeeklyDays.length > 0 ? editWeeklyDays.join(', ') : 'Mon';
+        finalRecurrenceInterval = Math.max(1, parseInt(editRecurrenceInterval) || 1);
+      } else if (editRecurrenceType === 'Monthly') {
+        if (editMonthlyMode === 'ordinal') {
+          finalRecurrenceDay = `ordinal_${editMonthlyOrdinalPos}_${editMonthlyOrdinalDay}`;
+        } else {
+          finalRecurrenceDay = editMonthlyDay;
+        }
+        finalRecurrenceInterval = Math.max(1, parseInt(editRecurrenceInterval) || 1);
+      } else if (editRecurrenceType === 'Yearly') {
+        finalRecurrenceDay = `${String(editYearlyMonth).padStart(2, '0')}-${String(editYearlyDay).padStart(2, '0')}`;
+        finalRecurrenceInterval = Math.max(1, parseInt(editRecurrenceInterval) || 1);
+      }
+    }
+
     fetch(`/api/tasks/${task.id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
@@ -156,6 +236,9 @@ export default function TaskDetailModal({
         assignee: editAssignee,
         scheduled_date: editScheduledDate || null,
         due_date: editDueDate || null,
+        recurrence_type: task.orbita_type === 'Routine' ? editRecurrenceType : null,
+        recurrence_interval: task.orbita_type === 'Routine' ? finalRecurrenceInterval : null,
+        recurrence_day: task.orbita_type === 'Routine' ? finalRecurrenceDay : null,
         target_hours: parseFloat(editTargetHours) || 0,
         updated_by: currentUser?.name || 'User'
       })
@@ -478,6 +561,294 @@ export default function TaskDetailModal({
                   <label className="form-label">Due Date</label>
                   <input type="date" className="form-input" value={editDueDate} onChange={(e) => setEditDueDate(e.target.value)} />
                 </div>
+              </div>
+            )}
+
+            {task.orbita_type === 'Routine' && (
+              <div className="glass-card" style={{ marginBottom: '1.25rem', padding: '1rem', borderLeft: '4px solid var(--accent-purple)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
+                  <label className="form-label" style={{ margin: 0, fontWeight: '800', display: 'flex', alignItems: 'center', gap: '0.4rem', color: 'var(--text-main)' }}>
+                    <Repeat size={16} color="var(--accent-purple)" /> Recurrence Frequency & Rules
+                  </label>
+                  <span className="badge" style={{ background: 'rgba(124, 58, 237, 0.15)', color: 'var(--accent-purple)', fontSize: '0.7rem' }}>
+                    Auto-Creates 2 Days Ahead
+                  </span>
+                </div>
+
+                {/* Frequency Selector Pills */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.5rem', marginBottom: '1rem' }}>
+                  {['Daily', 'Weekly', 'Monthly', 'Yearly'].map((f) => (
+                    <button
+                      key={f}
+                      type="button"
+                      className={`btn ${editRecurrenceType === f ? 'btn-primary' : 'btn-secondary'}`}
+                      style={{
+                        padding: '0.4rem',
+                        fontSize: '0.8rem',
+                        justifyContent: 'center',
+                        background: editRecurrenceType === f ? 'var(--accent-purple)' : undefined
+                      }}
+                      onClick={() => setEditRecurrenceType(f)}
+                    >
+                      {f}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Dynamic Sub-Options */}
+                {/* DAILY OPTIONS */}
+                {editRecurrenceType === 'Daily' && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.5rem' }}>
+                      <button
+                        type="button"
+                        className={`btn ${editDailyOption === 'every_day' ? 'btn-primary' : 'btn-secondary'}`}
+                        style={{ fontSize: '0.78rem', justifyContent: 'center' }}
+                        onClick={() => setEditDailyOption('every_day')}
+                      >
+                        Every Day
+                      </button>
+                      <button
+                        type="button"
+                        className={`btn ${editDailyOption === 'weekdays' ? 'btn-primary' : 'btn-secondary'}`}
+                        style={{ fontSize: '0.78rem', justifyContent: 'center' }}
+                        onClick={() => setEditDailyOption('weekdays')}
+                      >
+                        Weekdays (Mon - Fri)
+                      </button>
+                      <button
+                        type="button"
+                        className={`btn ${editDailyOption === 'weekends' ? 'btn-primary' : 'btn-secondary'}`}
+                        style={{ fontSize: '0.78rem', justifyContent: 'center' }}
+                        onClick={() => setEditDailyOption('weekends')}
+                      >
+                        Weekends (Sat - Sun)
+                      </button>
+                      <button
+                        type="button"
+                        className={`btn ${editDailyOption === 'every_n_days' ? 'btn-primary' : 'btn-secondary'}`}
+                        style={{ fontSize: '0.78rem', justifyContent: 'center' }}
+                        onClick={() => setEditDailyOption('every_n_days')}
+                      >
+                        Custom Interval (N Days)
+                      </button>
+                    </div>
+
+                    {editDailyOption === 'every_n_days' && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginTop: '0.3rem' }}>
+                        <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Repeat every</span>
+                        <input
+                          type="number"
+                          min="2"
+                          max="365"
+                          className="form-input"
+                          style={{ width: '80px', padding: '0.35rem' }}
+                          value={editRecurrenceInterval}
+                          onChange={(e) => setEditRecurrenceInterval(e.target.value)}
+                        />
+                        <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>days</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* WEEKLY OPTIONS */}
+                {editRecurrenceType === 'Weekly' && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <label className="form-label" style={{ margin: 0, fontSize: '0.75rem' }}>Days of the Week (Multi-select)</label>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                        <span>Repeat every</span>
+                        <select
+                          className="select-input"
+                          style={{ padding: '0.2rem 0.4rem', fontSize: '0.75rem' }}
+                          value={editRecurrenceInterval}
+                          onChange={(e) => setEditRecurrenceInterval(e.target.value)}
+                        >
+                          <option value="1">1 week</option>
+                          <option value="2">2 weeks (Bi-weekly)</option>
+                          <option value="3">3 weeks</option>
+                          <option value="4">4 weeks</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    {/* Day Pills */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '0.35rem' }}>
+                      {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day) => {
+                        const isSelected = editWeeklyDays.includes(day);
+                        return (
+                          <button
+                            key={day}
+                            type="button"
+                            className={`btn ${isSelected ? 'btn-primary' : 'btn-secondary'}`}
+                            style={{
+                              padding: '0.35rem 0.2rem',
+                              fontSize: '0.75rem',
+                              justifyContent: 'center',
+                              fontWeight: isSelected ? '800' : '500'
+                            }}
+                            onClick={() => {
+                              if (isSelected) {
+                                if (editWeeklyDays.length > 1) {
+                                  setEditWeeklyDays(editWeeklyDays.filter((d) => d !== day));
+                                }
+                              } else {
+                                setEditWeeklyDays([...editWeeklyDays, day]);
+                              }
+                            }}
+                          >
+                            {day}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* MONTHLY OPTIONS */}
+                {editRecurrenceType === 'Monthly' && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <div style={{ display: 'flex', gap: '0.5rem' }}>
+                        <button
+                          type="button"
+                          className={`btn ${editMonthlyMode === 'day_of_month' ? 'btn-primary' : 'btn-secondary'}`}
+                          style={{ padding: '0.25rem 0.6rem', fontSize: '0.75rem' }}
+                          onClick={() => setEditMonthlyMode('day_of_month')}
+                        >
+                          Specific Day
+                        </button>
+                        <button
+                          type="button"
+                          className={`btn ${editMonthlyMode === 'ordinal' ? 'btn-primary' : 'btn-secondary'}`}
+                          style={{ padding: '0.25rem 0.6rem', fontSize: '0.75rem' }}
+                          onClick={() => setEditMonthlyMode('ordinal')}
+                        >
+                          Relative Weekday
+                        </button>
+                      </div>
+
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                        <span>Every</span>
+                        <select
+                          className="select-input"
+                          style={{ padding: '0.2rem 0.4rem', fontSize: '0.75rem' }}
+                          value={editRecurrenceInterval}
+                          onChange={(e) => setEditRecurrenceInterval(e.target.value)}
+                        >
+                          <option value="1">1 month (Monthly)</option>
+                          <option value="2">2 months (Bi-monthly)</option>
+                          <option value="3">3 months (Quarterly)</option>
+                          <option value="6">6 months (Semi-annually)</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    {editMonthlyMode === 'day_of_month' ? (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                        <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Day of Month:</span>
+                        <select
+                          className="select-input"
+                          style={{ flex: 1, padding: '0.35rem 0.6rem' }}
+                          value={editMonthlyDay}
+                          onChange={(e) => setEditMonthlyDay(e.target.value)}
+                        >
+                          {Array.from({ length: 31 }).map((_, i) => (
+                            <option key={i + 1} value={String(i + 1)}>
+                              {i + 1}{i + 1 === 1 ? 'st' : i + 1 === 2 ? 'nd' : i + 1 === 3 ? 'rd' : 'th'} day of month
+                            </option>
+                          ))}
+                          <option value="last">Last Day of Month (e.g. 28th/30th/31st)</option>
+                        </select>
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                        <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>On the:</span>
+                        <select
+                          className="select-input"
+                          value={editMonthlyOrdinalPos}
+                          onChange={(e) => setEditMonthlyOrdinalPos(e.target.value)}
+                          style={{ padding: '0.35rem 0.5rem' }}
+                        >
+                          <option value="1">1st (First)</option>
+                          <option value="2">2nd (Second)</option>
+                          <option value="3">3rd (Third)</option>
+                          <option value="4">4th (Fourth)</option>
+                          <option value="last">Last</option>
+                        </select>
+                        <select
+                          className="select-input"
+                          value={editMonthlyOrdinalDay}
+                          onChange={(e) => setEditMonthlyOrdinalDay(e.target.value)}
+                          style={{ flex: 1, padding: '0.35rem 0.5rem' }}
+                        >
+                          <option value="mon">Monday</option>
+                          <option value="tue">Tuesday</option>
+                          <option value="wed">Wednesday</option>
+                          <option value="thu">Thursday</option>
+                          <option value="fri">Friday</option>
+                          <option value="sat">Saturday</option>
+                          <option value="sun">Sunday</option>
+                        </select>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* YEARLY OPTIONS */}
+                {editRecurrenceType === 'Yearly' && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <label className="form-label" style={{ margin: 0, fontSize: '0.75rem' }}>Annual Schedule</label>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                        <span>Repeat every</span>
+                        <select
+                          className="select-input"
+                          style={{ padding: '0.2rem 0.4rem', fontSize: '0.75rem' }}
+                          value={editRecurrenceInterval}
+                          onChange={(e) => setEditRecurrenceInterval(e.target.value)}
+                        >
+                          <option value="1">1 year</option>
+                          <option value="2">2 years</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '0.6rem' }}>
+                      <div>
+                        <label className="form-label" style={{ fontSize: '0.75rem' }}>Month</label>
+                        <select
+                          className="select-input"
+                          style={{ width: '100%', padding: '0.35rem 0.6rem' }}
+                          value={editYearlyMonth}
+                          onChange={(e) => setEditYearlyMonth(Number(e.target.value))}
+                        >
+                          {[
+                            'January', 'February', 'March', 'April', 'May', 'June',
+                            'July', 'August', 'September', 'October', 'November', 'December'
+                          ].map((m, idx) => (
+                            <option key={idx + 1} value={idx + 1}>{m}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="form-label" style={{ fontSize: '0.75rem' }}>Day</label>
+                        <select
+                          className="select-input"
+                          style={{ width: '100%', padding: '0.35rem 0.6rem' }}
+                          value={editYearlyDay}
+                          onChange={(e) => setEditYearlyDay(Number(e.target.value))}
+                        >
+                          {Array.from({ length: 31 }).map((_, i) => (
+                            <option key={i + 1} value={i + 1}>{i + 1}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 

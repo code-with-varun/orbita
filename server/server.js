@@ -195,45 +195,119 @@ async function generateRoutineOccurrences(userFilter = {}) {
       const recType = (routine.recurrence_type || 'Daily').toLowerCase();
       const interval = Math.max(1, routine.recurrence_interval || 1);
       const recDay = (routine.recurrence_day || '').trim().toLowerCase();
+      const createdDate = new Date(routine.createdAt || today);
+      createdDate.setHours(0, 0, 0, 0);
 
       for (const d of datesToCheck) {
         const dateStr = d.toISOString().split('T')[0]; // "YYYY-MM-DD"
         let isMatch = false;
 
         if (recType === 'daily') {
-          if (interval === 1) {
+          if (recDay === 'weekdays' || recDay.includes('weekday') || recDay.includes('workday')) {
+            isMatch = d.getDay() >= 1 && d.getDay() <= 5;
+          } else if (recDay === 'weekends' || recDay.includes('weekend')) {
+            isMatch = d.getDay() === 0 || d.getDay() === 6;
+          } else if (interval === 1) {
             isMatch = true;
           } else {
-            const startDay = new Date(routine.createdAt || today);
-            startDay.setHours(0, 0, 0, 0);
-            const diffDays = Math.floor((d.getTime() - startDay.getTime()) / (1000 * 60 * 60 * 24));
+            const diffDays = Math.floor((d.getTime() - createdDate.getTime()) / (1000 * 60 * 60 * 24));
             if (diffDays >= 0 && diffDays % interval === 0) {
               isMatch = true;
             }
           }
         } else if (recType === 'weekly') {
-          const currentDayName = dayNames[d.getDay()].toLowerCase();
+          const dayShort = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'][d.getDay()];
+          const dayFull = dayNames[d.getDay()].toLowerCase();
+
+          let dayMatches = false;
           if (!recDay) {
-            const creationDayName = dayNames[new Date(routine.createdAt || today).getDay()].toLowerCase();
-            isMatch = currentDayName === creationDayName;
-          } else if (recDay.includes('weekday') || recDay.includes('workday')) {
-            isMatch = d.getDay() >= 1 && d.getDay() <= 5;
+            const creationDayShort = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'][createdDate.getDay()];
+            dayMatches = dayShort === creationDayShort;
+          } else if (recDay.includes('weekday')) {
+            dayMatches = d.getDay() >= 1 && d.getDay() <= 5;
           } else if (recDay.includes('weekend')) {
-            isMatch = d.getDay() === 0 || d.getDay() === 6;
+            dayMatches = d.getDay() === 0 || d.getDay() === 6;
           } else {
-            isMatch = currentDayName.includes(recDay) || recDay.includes(currentDayName);
+            const selectedDays = recDay.split(',').map((s) => s.trim().toLowerCase());
+            dayMatches = selectedDays.some((s) => s === dayShort || s === dayFull || dayFull.startsWith(s) || dayShort.startsWith(s));
+          }
+
+          if (dayMatches) {
+            if (interval === 1) {
+              isMatch = true;
+            } else {
+              const diffWeeks = Math.floor((d.getTime() - createdDate.getTime()) / (1000 * 60 * 60 * 24 * 7));
+              if (diffWeeks >= 0 && diffWeeks % interval === 0) {
+                isMatch = true;
+              }
+            }
           }
         } else if (recType === 'monthly') {
-          const targetDayNum = parseInt(recDay, 10);
-          if (!isNaN(targetDayNum)) {
-            isMatch = d.getDate() === targetDayNum;
+          let dayMatches = false;
+          const lastDayOfCurMonth = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+
+          if (recDay === 'last' || recDay === 'last_day' || recDay.includes('last day')) {
+            dayMatches = d.getDate() === lastDayOfCurMonth;
+          } else if (recDay.startsWith('ordinal_')) {
+            // e.g. ordinal_1_mon (1st Monday of month) or ordinal_last_fri (last Friday of month)
+            const parts = recDay.split('_');
+            const pos = parts[1]; // 1, 2, 3, 4, or last
+            const targetWeekday = parts[2]; // mon, tue, wed, thu, fri, sat, sun
+            const dayShort = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'][d.getDay()];
+
+            if (targetWeekday === dayShort) {
+              if (pos === 'last') {
+                dayMatches = d.getDate() + 7 > lastDayOfCurMonth;
+              } else {
+                const nth = Math.floor((d.getDate() - 1) / 7) + 1;
+                dayMatches = String(nth) === pos;
+              }
+            }
           } else {
-            const creationDayNum = new Date(routine.createdAt || today).getDate();
-            isMatch = d.getDate() === creationDayNum;
+            const targetDayNum = parseInt(recDay, 10);
+            if (!isNaN(targetDayNum)) {
+              dayMatches = d.getDate() === Math.min(targetDayNum, lastDayOfCurMonth);
+            } else {
+              dayMatches = d.getDate() === Math.min(createdDate.getDate(), lastDayOfCurMonth);
+            }
+          }
+
+          if (dayMatches) {
+            if (interval === 1) {
+              isMatch = true;
+            } else {
+              const diffMonths = (d.getFullYear() - createdDate.getFullYear()) * 12 + (d.getMonth() - createdDate.getMonth());
+              if (diffMonths >= 0 && diffMonths % interval === 0) {
+                isMatch = true;
+              }
+            }
           }
         } else if (recType === 'yearly') {
-          const creationDate = new Date(routine.createdAt || today);
-          isMatch = d.getMonth() === creationDate.getMonth() && d.getDate() === creationDate.getDate();
+          let monthMatches = false;
+          let dayMatches = false;
+
+          if (recDay.includes('-') || recDay.includes('/')) {
+            const separator = recDay.includes('-') ? '-' : '/';
+            const parts = recDay.split(separator);
+            const targetMonth = parseInt(parts[0], 10) - 1; // 0-indexed
+            const targetDay = parseInt(parts[1], 10);
+            monthMatches = d.getMonth() === targetMonth;
+            dayMatches = d.getDate() === targetDay;
+          } else {
+            monthMatches = d.getMonth() === createdDate.getMonth();
+            dayMatches = d.getDate() === createdDate.getDate();
+          }
+
+          if (monthMatches && dayMatches) {
+            if (interval === 1) {
+              isMatch = true;
+            } else {
+              const diffYears = d.getFullYear() - createdDate.getFullYear();
+              if (diffYears >= 0 && diffYears % interval === 0) {
+                isMatch = true;
+              }
+            }
+          }
         }
 
         if (isMatch) {
@@ -550,6 +624,9 @@ app.put('/api/tasks/:id', async (req, res) => {
     if (updates.notes !== undefined) task.notes = updates.notes;
     if (updates.target_hours !== undefined) task.target_hours = parseFloat(updates.target_hours) || 0;
     if (updates.is_starred !== undefined) task.is_starred = Boolean(updates.is_starred);
+    if (updates.recurrence_type !== undefined) task.recurrence_type = updates.recurrence_type;
+    if (updates.recurrence_interval !== undefined) task.recurrence_interval = parseInt(updates.recurrence_interval) || 1;
+    if (updates.recurrence_day !== undefined) task.recurrence_day = updates.recurrence_day;
 
     if (updates.is_urgent !== undefined || updates.is_important !== undefined) {
       const urg = updates.is_urgent !== undefined ? Boolean(updates.is_urgent) : task.is_urgent;
