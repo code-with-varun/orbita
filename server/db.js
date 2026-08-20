@@ -105,6 +105,8 @@ const TaskSchema = new mongoose.Schema({
   timer_started_at: { type: Date },
   timer_accumulated_seconds: { type: Number, default: 0 },
   is_starred: { type: Boolean, default: false },
+  routine_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Task' },
+  routine_occurrence_date: { type: String },
   stages: [ProjectStageSchema],
   notes: { type: String, default: '' },
   createdAt: { type: Date, default: Date.now },

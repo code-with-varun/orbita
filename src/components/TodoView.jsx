@@ -232,6 +232,25 @@ export default function TodoView({
                           {task.priority_quadrant || 'Q2'}
                         </span>
 
+                        {/* Routine Occurrence Tag */}
+                        {task.routine_id && (
+                          <span
+                            className="badge"
+                            style={{
+                              background: 'rgba(124, 58, 237, 0.12)',
+                              color: 'var(--accent-purple)',
+                              border: '1px solid rgba(124, 58, 237, 0.25)',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '0.3rem',
+                              fontSize: '0.65rem',
+                              fontWeight: '700'
+                            }}
+                          >
+                            <Repeat size={10} /> Routine ({task.routine_occurrence_date})
+                          </span>
+                        )}
+
                         {/* If Project: Show Status as Badge */}
                         {isProject && (
                           <span className={`badge ${isDone ? 'badge-success' : 'badge-priority-medium'}`} style={{ fontSize: '0.65rem' }}>

@@ -120,7 +120,7 @@ app.get('/api/auth/users', async (req, res) => {
 // WORK ITEMS (TASK | ROUTINE | GOAL | PROJECT)
 // -------------------------------------------------------------
 
-function buildUserFilter(req) {
+function buildUserFilter(req, entityType = 'task') {
   const { user_id, user_email, user_role, user_name } = req.query;
 
   // Superadmin has global visibility
@@ -129,9 +129,21 @@ function buildUserFilter(req) {
   }
 
   const conditions = [];
-  if (user_id) conditions.push({ user_id });
-  if (user_email) conditions.push({ user_email: user_email.toLowerCase().trim() });
-  if (user_name) conditions.push({ created_by: user_name });
+  if (user_id && user_id !== 'undefined' && user_id !== 'null' && user_id !== '') {
+    conditions.push({ user_id });
+  }
+  if (user_email && user_email !== 'undefined' && user_email !== 'null' && user_email !== '') {
+    conditions.push({ user_email: user_email.toLowerCase().trim() });
+  }
+  if (user_name && user_name !== 'undefined' && user_name !== 'null' && user_name !== '') {
+    if (entityType === 'task') {
+      conditions.push({ created_by: user_name });
+      conditions.push({ assignee: user_name });
+    } else {
+      conditions.push({ user_name: user_name });
+      conditions.push({ created_by: user_name });
+    }
+  }
 
   if (conditions.length > 0) {
     return { $or: conditions };
@@ -139,10 +151,127 @@ function buildUserFilter(req) {
   return {};
 }
 
+// -------------------------------------------------------------
+// ROUTINE AUTO-OCCURRENCE ENGINE
+// Automatically evaluates recurring routines and creates actionable
+// task instances up to 2 days in advance without duplicates.
+// -------------------------------------------------------------
+async function generateRoutineOccurrences(userFilter = {}) {
+  try {
+    const routineQuery = { orbita_type: 'Routine', status: { $ne: 'Completed' }, ...userFilter };
+    const routines = await Task.find(routineQuery);
+    if (!routines || routines.length === 0) return;
+
+    // Date range: 7 days ago to 2 days in advance (inclusive)
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const datesToCheck = [];
+    for (let offset = -7; offset <= 2; offset++) {
+      const d = new Date(today);
+      d.setDate(today.getDate() + offset);
+      datesToCheck.push(d);
+    }
+
+    const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+    for (const routine of routines) {
+      const recType = (routine.recurrence_type || 'Daily').toLowerCase();
+      const interval = Math.max(1, routine.recurrence_interval || 1);
+      const recDay = (routine.recurrence_day || '').trim().toLowerCase();
+
+      for (const d of datesToCheck) {
+        const dateStr = d.toISOString().split('T')[0]; // "YYYY-MM-DD"
+        let isMatch = false;
+
+        if (recType === 'daily') {
+          if (interval === 1) {
+            isMatch = true;
+          } else {
+            const startDay = new Date(routine.createdAt || today);
+            startDay.setHours(0, 0, 0, 0);
+            const diffDays = Math.floor((d.getTime() - startDay.getTime()) / (1000 * 60 * 60 * 24));
+            if (diffDays >= 0 && diffDays % interval === 0) {
+              isMatch = true;
+            }
+          }
+        } else if (recType === 'weekly') {
+          const currentDayName = dayNames[d.getDay()].toLowerCase();
+          if (!recDay) {
+            const creationDayName = dayNames[new Date(routine.createdAt || today).getDay()].toLowerCase();
+            isMatch = currentDayName === creationDayName;
+          } else if (recDay.includes('weekday') || recDay.includes('workday')) {
+            isMatch = d.getDay() >= 1 && d.getDay() <= 5;
+          } else if (recDay.includes('weekend')) {
+            isMatch = d.getDay() === 0 || d.getDay() === 6;
+          } else {
+            isMatch = currentDayName.includes(recDay) || recDay.includes(currentDayName);
+          }
+        } else if (recType === 'monthly') {
+          const targetDayNum = parseInt(recDay, 10);
+          if (!isNaN(targetDayNum)) {
+            isMatch = d.getDate() === targetDayNum;
+          } else {
+            const creationDayNum = new Date(routine.createdAt || today).getDate();
+            isMatch = d.getDate() === creationDayNum;
+          }
+        } else if (recType === 'yearly') {
+          const creationDate = new Date(routine.createdAt || today);
+          isMatch = d.getMonth() === creationDate.getMonth() && d.getDate() === creationDate.getDate();
+        }
+
+        if (isMatch) {
+          // Check if an occurrence task already exists for this routine and date
+          const existing = await Task.findOne({
+            routine_id: routine._id,
+            routine_occurrence_date: dateStr
+          });
+
+          if (!existing) {
+            // Create a discrete Task instance for this occurrence
+            const allTasksCount = await Task.countDocuments({ orbita_type: 'Task' });
+            const ticket_key = `TSK-${String(allTasksCount + 1).padStart(3, '0')}`;
+
+            await Task.create({
+              ticket_key,
+              orbita_type: 'Task',
+              routine_id: routine._id,
+              routine_occurrence_date: dateStr,
+              title: routine.title,
+              description: routine.description || `Routine occurrence for ${dateStr} (${routine.recurrence_type || 'Daily'})`,
+              tags: routine.tags ? `${routine.tags}, Routine` : 'Routine',
+              workspace: routine.workspace || 'Personal',
+              priority_quadrant: routine.priority_quadrant || 'Q3',
+              priority: routine.priority || 'Medium',
+              status: 'Active',
+              assignee: routine.assignee || 'Unassigned',
+              user_id: routine.user_id,
+              user_email: routine.user_email,
+              created_by: routine.created_by || 'User',
+              scheduled_date: dateStr,
+              due_date: dateStr,
+              is_urgent: routine.is_urgent || false,
+              is_important: routine.is_important || false,
+              is_timer_allowed: false,
+              is_starred: false,
+              notes: routine.notes || ''
+            });
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.error('Error generating routine occurrences:', err);
+  }
+}
+
 app.get('/api/tasks', async (req, res) => {
   try {
+    const userFilter = buildUserFilter(req, 'task');
+    // Ensure pending routine tasks up to 2 days ahead are generated
+    await generateRoutineOccurrences(userFilter);
+
     const { orbita_type, workspace, priority_quadrant, status, search, is_starred } = req.query;
-    const userFilter = buildUserFilter(req);
     const query = { ...userFilter };
 
     if (orbita_type) {
@@ -696,6 +825,8 @@ async function autoStopAnyRunningTimer(exceptTaskId = null, exceptStageTaskId = 
         openSession.end_time = now;
         openSession.duration_seconds = totalSec;
         openSession.notes = `${t.orbita_type} Focus Session (Auto-stopped)`;
+        if (!openSession.user_id && t.user_id) openSession.user_id = t.user_id;
+        if (!openSession.user_email && t.user_email) openSession.user_email = t.user_email;
         await openSession.save();
       }
     }
@@ -726,6 +857,8 @@ async function autoStopAnyRunningTimer(exceptTaskId = null, exceptStageTaskId = 
               openSession.end_time = now;
               openSession.duration_seconds = totalSec;
               openSession.notes = `Task Focus: ${subT.title} (Auto-stopped)`;
+              if (!openSession.user_id && t.user_id) openSession.user_id = t.user_id;
+              if (!openSession.user_email && t.user_email) openSession.user_email = t.user_email;
               await openSession.save();
             }
           }
@@ -761,12 +894,14 @@ app.post('/api/tasks/:id/timer/start', async (req, res) => {
 
     await TimeSession.create({
       task_id: task._id,
+      user_id: task.user_id || req.body.user_id || null,
+      user_email: task.user_email || req.body.user_email || null,
       ticket_key: task.ticket_key,
       task_title: task.title,
       orbita_type: task.orbita_type,
       workspace: task.workspace,
       tags: task.tags,
-      user_name: req.body.user_name || 'User',
+      user_name: req.body.user_name || task.created_by || 'User',
       start_time: new Date(),
       notes: `${task.orbita_type} Focus Session`
     });
@@ -854,6 +989,12 @@ app.post('/api/tasks/:id/timer/stop', async (req, res) => {
       openSession.end_time = now;
       openSession.duration_seconds = totalSeconds;
       openSession.notes = req.body.notes || `${task.orbita_type} Deep Focus Session`;
+      if (!openSession.user_id && (task.user_id || req.body.user_id)) {
+        openSession.user_id = task.user_id || req.body.user_id;
+      }
+      if (!openSession.user_email && (task.user_email || req.body.user_email)) {
+        openSession.user_email = task.user_email || req.body.user_email;
+      }
       await openSession.save();
     }
 
@@ -866,11 +1007,13 @@ app.post('/api/tasks/:id/timer/stop', async (req, res) => {
 
     await AuditLog.create({
       task_id: task._id,
+      user_id: task.user_id || req.body.user_id || null,
+      user_email: task.user_email || req.body.user_email || null,
       ticket_key: task.ticket_key,
       task_title: task.title,
       orbita_type: task.orbita_type,
       workspace: task.workspace,
-      user_name: req.body.user_name || 'User',
+      user_name: req.body.user_name || task.created_by || 'User',
       action: 'Focus Session Completed',
       details: `Logged ${durationHours}h focus session (${totalSeconds}s)`
     });
@@ -916,13 +1059,15 @@ app.post('/api/projects/:id/stages/:stageId/tasks/:taskId/timer/start', async (r
 
     await TimeSession.create({
       task_id: project._id,
+      user_id: project.user_id || req.body.user_id || null,
+      user_email: project.user_email || req.body.user_email || null,
       stage_task_id: stageTask._id.toString(),
       ticket_key: stageTask.ticket_key || project.ticket_key,
       task_title: `${stageTask.title} (${project.title})`,
       orbita_type: 'Project',
       workspace: project.workspace,
       tags: project.tags,
-      user_name: req.body.user_name || 'User',
+      user_name: req.body.user_name || project.created_by || 'User',
       start_time: new Date(),
       notes: `Stage Task Focus: ${stageTask.title}`
     });
@@ -1040,6 +1185,12 @@ app.post('/api/projects/:id/stages/:stageId/tasks/:taskId/timer/stop', async (re
       openSession.end_time = now;
       openSession.duration_seconds = totalSeconds;
       openSession.notes = req.body.notes || `Task Focus: ${stageTask.title}`;
+      if (!openSession.user_id && (project.user_id || req.body.user_id)) {
+        openSession.user_id = project.user_id || req.body.user_id;
+      }
+      if (!openSession.user_email && (project.user_email || req.body.user_email)) {
+        openSession.user_email = project.user_email || req.body.user_email;
+      }
       await openSession.save();
     }
 
@@ -1059,11 +1210,13 @@ app.post('/api/projects/:id/stages/:stageId/tasks/:taskId/timer/stop', async (re
 
     await AuditLog.create({
       task_id: project._id,
+      user_id: project.user_id || req.body.user_id || null,
+      user_email: project.user_email || req.body.user_email || null,
       ticket_key: stageTask.ticket_key || project.ticket_key,
       task_title: stageTask.title,
       orbita_type: 'Project',
       workspace: project.workspace,
-      user_name: req.body.user_name || 'User',
+      user_name: req.body.user_name || project.created_by || 'User',
       action: 'Task Focus Session Completed',
       details: `Logged ${durationHours}h focus on "${stageTask.title}" (${totalSeconds}s)`
     });
@@ -1083,7 +1236,7 @@ app.post('/api/projects/:id/stages/:stageId/tasks/:taskId/timer/stop', async (re
 // Timesheets
 app.get('/api/timesheets', async (req, res) => {
   try {
-    const userFilter = buildUserFilter(req);
+    const userFilter = buildUserFilter(req, 'session');
     const sessions = await TimeSession.find(userFilter).sort({ _id: -1 });
     const formatted = sessions.map((s) => ({
       ...s.toObject(),
@@ -1096,14 +1249,27 @@ app.get('/api/timesheets', async (req, res) => {
   }
 });
 
+// Trigger Routine Generation Endpoint
+app.post('/api/routines/generate', async (req, res) => {
+  try {
+    const userFilter = buildUserFilter(req, 'task');
+    await generateRoutineOccurrences(userFilter);
+    res.json({ message: 'Routines evaluated and occurrences created up to 2 days in advance.' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // -------------------------------------------------------------
 // EISENHOWER PRIORITY MATRIX (Q1 - Q4) WITH STAGE-TASKS
 // -------------------------------------------------------------
 
 app.get('/api/matrix', async (req, res) => {
   try {
+    const userFilter = buildUserFilter(req, 'task');
+    await generateRoutineOccurrences(userFilter);
+
     const { workspace } = req.query;
-    const userFilter = buildUserFilter(req);
     const query = { ...userFilter, status: { $ne: 'Completed' } };
     if (workspace && workspace !== 'All') {
       query.workspace = new RegExp(`^${workspace}$`, 'i');
@@ -1182,7 +1348,7 @@ app.get('/api/matrix', async (req, res) => {
 app.get('/api/highlights/month', async (req, res) => {
   try {
     const currentMonth = new Date().toLocaleString('default', { month: 'long', year: 'numeric' });
-    const userFilter = buildUserFilter(req);
+    const userFilter = buildUserFilter(req, 'task');
 
     const total = await Task.countDocuments(userFilter);
     const completed = await Task.countDocuments({ ...userFilter, status: 'Completed' });
@@ -1234,8 +1400,10 @@ app.get('/api/highlights/month', async (req, res) => {
 
 app.get('/api/dashboard/stats', async (req, res) => {
   try {
+    const userFilter = buildUserFilter(req, 'task');
+    await generateRoutineOccurrences(userFilter);
+
     const { workspace } = req.query;
-    const userFilter = buildUserFilter(req);
     const query = { ...userFilter };
     if (workspace && workspace !== 'All') {
       query.workspace = new RegExp(`^${workspace}$`, 'i');
@@ -1288,7 +1456,7 @@ app.get('/api/dashboard/stats', async (req, res) => {
 
 app.get('/api/audit-logs', async (req, res) => {
   try {
-    const userFilter = buildUserFilter(req);
+    const userFilter = buildUserFilter(req, 'audit');
     const logs = await AuditLog.find(userFilter).sort({ _id: -1 }).limit(150);
     const formatted = logs.map((l) => ({
       ...l.toObject(),
@@ -1301,10 +1469,39 @@ app.get('/api/audit-logs', async (req, res) => {
   }
 });
 
+// One-time non-destructive backfill for existing sessions without user_id
+async function backfillSessionUserData() {
+  try {
+    const sessionsWithoutUser = await TimeSession.find({
+      $or: [{ user_id: null }, { user_email: null }, { user_id: { $exists: false } }]
+    });
+    for (const session of sessionsWithoutUser) {
+      if (session.task_id) {
+        const task = await Task.findById(session.task_id);
+        if (task) {
+          let updated = false;
+          if (!session.user_id && task.user_id) {
+            session.user_id = task.user_id;
+            updated = true;
+          }
+          if (!session.user_email && task.user_email) {
+            session.user_email = task.user_email;
+            updated = true;
+          }
+          if (updated) await session.save();
+        }
+      }
+    }
+  } catch (e) {
+    console.error('Backfill sessions notice:', e.message);
+  }
+}
+
 // -------------------------------------------------------------
 // START SERVER
 // -------------------------------------------------------------
 
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
   console.log(`Orbita MERN API Server running on port ${PORT}`);
+  await backfillSessionUserData();
 });
