@@ -22,7 +22,8 @@ export default function KanbanView({
     { id: 'Completed', title: 'Completed', color: 'var(--accent-green)' }
   ];
 
-  const filteredTasks = tasks.filter((t) => {
+  const safeTasks = Array.isArray(tasks) ? tasks : [];
+  const filteredTasks = safeTasks.filter((t) => {
     // Master routines appear only in the Routines page; their generated actionable tasks appear here
     if (t.orbita_type === 'Routine') return false;
     if (filterType && t.orbita_type !== filterType) return false;

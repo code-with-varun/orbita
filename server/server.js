@@ -1367,6 +1367,85 @@ app.get('/api/timesheets', async (req, res) => {
   }
 });
 
+// Audit Logs
+app.get('/api/audit-logs', async (req, res) => {
+  try {
+    const userFilter = buildUserFilter(req, 'audit');
+    const logs = await AuditLog.find(userFilter).sort({ _id: -1 }).limit(300);
+    const formatted = logs.map((l) => ({
+      ...l.toObject(),
+      id: l._id.toString(),
+      created_at: l.createdAt
+    }));
+    res.json(formatted);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Monthly Highlights & Achievements
+app.get('/api/highlights/month', async (req, res) => {
+  try {
+    const userFilter = buildUserFilter(req, 'task');
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    const allItems = await Task.find(userFilter);
+    const completedThisMonth = allItems.filter(
+      (t) => t.status === 'Completed' && t.completed_at && new Date(t.completed_at) >= startOfMonth
+    );
+    const starredItems = allItems.filter((t) => t.is_starred);
+
+    const sessionFilter = buildUserFilter(req, 'session');
+    const sessions = await TimeSession.find(sessionFilter);
+    const sessionsThisMonth = sessions.filter((s) => new Date(s.start_time) >= startOfMonth);
+    const totalFocusSeconds = sessionsThisMonth.reduce((acc, curr) => acc + (curr.duration_seconds || 0), 0);
+    const totalFocusHours = Math.round((totalFocusSeconds / 3600) * 100) / 100;
+
+    const projectsCompleted = completedThisMonth.filter((t) => t.orbita_type === 'Project').length;
+    const routinesKept = completedThisMonth.filter((t) => t.routine_id || t.orbita_type === 'Routine').length;
+    const goalsTracked = allItems.filter((t) => t.orbita_type === 'Goal' && (t.actual_hours || 0) > 0).length;
+
+    const achievementScore = completedThisMonth.length * 10 + Math.round(totalFocusHours * 5) + starredItems.length * 15;
+
+    const monthNames = [
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'
+    ];
+    const monthStr = `${monthNames[now.getMonth()]} ${now.getFullYear()}`;
+
+    const badges = [];
+    if (totalFocusHours >= 10) {
+      badges.push({ id: 'b1', title: 'Deep Work Champion', description: 'Logged 10+ hours of focused deep work', icon: 'Clock' });
+    }
+    if (completedThisMonth.length >= 5) {
+      badges.push({ id: 'b2', title: 'Execution Machine', description: 'Completed 5+ work items this month', icon: 'CheckCircle2' });
+    }
+    if (projectsCompleted >= 1) {
+      badges.push({ id: 'b3', title: 'Project Shipper', description: 'Successfully delivered a structured project', icon: 'FolderGit2' });
+    }
+    if (starredItems.length >= 1) {
+      badges.push({ id: 'b4', title: 'Priority Master', description: 'Maintained high focus on starred items', icon: 'Star' });
+    }
+
+    res.json({
+      month: monthStr,
+      scorecard: {
+        achievement_score: achievementScore,
+        total_completed: completedThisMonth.length,
+        projects_completed: projectsCompleted,
+        routines_kept: routinesKept,
+        focus_hours: totalFocusHours,
+        goals_tracked: goalsTracked
+      },
+      starred_items: starredItems.map((t) => ({ ...t.toObject(), id: t._id.toString() })),
+      badges
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Trigger Routine Generation Endpoint
 app.post('/api/routines/generate', async (req, res) => {
   try {

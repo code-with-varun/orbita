@@ -3,7 +3,7 @@ import { ChevronLeft, ChevronRight, Plus, Star, Repeat, Target, FolderGit2, Chec
 import { CalendarSkeleton } from './SkeletonLoader';
 
 export default function CalendarView({
-  tasks,
+  tasks = [],
   loading = false,
   onSelectTask,
   onCreateOnDate,
@@ -46,7 +46,8 @@ export default function CalendarView({
   const getTasksForDate = (day) => {
     if (!day) return [];
     const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-    return tasks.filter((t) => t.orbita_type !== 'Routine' && (t.scheduled_date === dateStr || t.due_date === dateStr));
+    const safeTasks = Array.isArray(tasks) ? tasks : [];
+    return safeTasks.filter((t) => t.orbita_type !== 'Routine' && (t.scheduled_date === dateStr || t.due_date === dateStr));
   };
 
   const getTypeBorder = (type) => {

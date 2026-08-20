@@ -15,16 +15,18 @@ export default function TimesheetView({ currentUser, onSelectTask }) {
     fetch(url)
       .then((res) => res.json())
       .then((data) => {
-        setSessions(data);
+        setSessions(Array.isArray(data) ? data : []);
         setLoading(false);
       })
       .catch((err) => {
         console.error(err);
+        setSessions([]);
         setLoading(false);
       });
   }, [currentUser]);
 
-  const totalSeconds = sessions.reduce((acc, curr) => acc + (curr.duration_seconds || 0), 0);
+  const safeSessions = Array.isArray(sessions) ? sessions : [];
+  const totalSeconds = safeSessions.reduce((acc, curr) => acc + (curr.duration_seconds || 0), 0);
   const totalHours = Math.round((totalSeconds / 3600) * 100) / 100;
 
   const handleExportCsv = () => {

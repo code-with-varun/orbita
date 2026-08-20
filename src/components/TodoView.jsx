@@ -104,7 +104,8 @@ export default function TodoView({
       .catch((err) => console.error(err));
   };
 
-  const filteredTasks = tasks.filter((t) => {
+  const safeTasks = Array.isArray(tasks) ? tasks : [];
+  const filteredTasks = safeTasks.filter((t) => {
     if (typeFilterDefault && t.orbita_type !== typeFilterDefault) return false;
     if (filterWorkspace && t.workspace !== filterWorkspace) return false;
     if (filterQuadrant && t.priority_quadrant !== filterQuadrant) return false;

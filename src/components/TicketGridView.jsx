@@ -20,7 +20,8 @@ export default function TicketGridView({ tasks, loading = false, onSelectTask, o
     }
   };
 
-  const filteredTasks = tasks.filter((t) => {
+  const safeTasks = Array.isArray(tasks) ? tasks : [];
+  const filteredTasks = safeTasks.filter((t) => {
     if (filterType && t.orbita_type !== filterType) return false;
     if (filterWorkspace && t.workspace !== filterWorkspace) return false;
     if (filterPriority && t.priority !== filterPriority) return false;

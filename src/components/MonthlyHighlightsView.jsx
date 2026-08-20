@@ -36,7 +36,17 @@ export default function MonthlyHighlightsView({ currentUser, onSelectTask, refre
     );
   }
 
-  const { scorecard, starred_items, badges, month } = data;
+  const scorecard = data?.scorecard || {
+    achievement_score: 0,
+    total_completed: 0,
+    projects_completed: 0,
+    routines_kept: 0,
+    focus_hours: 0,
+    goals_tracked: 0
+  };
+  const starred_items = Array.isArray(data?.starred_items) ? data.starred_items : [];
+  const badges = Array.isArray(data?.badges) ? data.badges : [];
+  const month = data?.month || 'Current Month';
 
   return (
     <div className="content-area">
