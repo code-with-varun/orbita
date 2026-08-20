@@ -20,6 +20,7 @@ import LandingPage from './components/LandingPage';
 export default function App() {
   const [activeView, setActiveView] = useState('dashboard');
   const [tasks, setTasks] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [workspaceFilter, setWorkspaceFilter] = useState('All'); // 'All' | 'Personal' | 'Work'
@@ -88,6 +89,7 @@ export default function App() {
   };
 
   const fetchTasks = () => {
+    setLoading(true);
     let url = `/api/tasks?`;
     if (workspaceFilter && workspaceFilter !== 'All') {
       url += `workspace=${workspaceFilter}&`;
@@ -102,11 +104,17 @@ export default function App() {
     fetch(url)
       .then((res) => res.json())
       .then((data) => {
-        setTasks(data);
-        const running = data.find((t) => t.is_timer_running);
+        const safeData = Array.isArray(data) ? data : [];
+        setTasks(safeData);
+        const running = safeData.find((t) => t.is_timer_running);
         setRunningTask(running || null);
+        setLoading(false);
       })
-      .catch((err) => console.error(err));
+      .catch((err) => {
+        console.error(err);
+        setTasks([]);
+        setLoading(false);
+      });
   };
 
   useEffect(() => {
@@ -333,6 +341,8 @@ export default function App() {
             onUpdateTaskStatus={handleUpdateTaskStatus}
             onSelectTask={(id) => setSelectedTaskId(id)}
             onStartTimer={handleStartTimer}
+            onPauseTimer={handlePauseTimer}
+            onResumeTimer={handleResumeTimer}
             onStopTimer={handleStopTimer}
             onToggleStar={handleToggleStar}
             onRefresh={refreshAll}
@@ -351,6 +361,8 @@ export default function App() {
             onUpdateTaskStatus={handleUpdateTaskStatus}
             onSelectTask={(id) => setSelectedTaskId(id)}
             onStartTimer={handleStartTimer}
+            onPauseTimer={handlePauseTimer}
+            onResumeTimer={handleResumeTimer}
             onStopTimer={handleStopTimer}
             onToggleStar={handleToggleStar}
             onRefresh={refreshAll}
@@ -369,6 +381,8 @@ export default function App() {
             onUpdateTaskStatus={handleUpdateTaskStatus}
             onSelectTask={(id) => setSelectedTaskId(id)}
             onStartTimer={handleStartTimer}
+            onPauseTimer={handlePauseTimer}
+            onResumeTimer={handleResumeTimer}
             onStopTimer={handleStopTimer}
             onToggleStar={handleToggleStar}
             onRefresh={refreshAll}
@@ -387,6 +401,8 @@ export default function App() {
             onUpdateTaskStatus={handleUpdateTaskStatus}
             onSelectTask={(id) => setSelectedTaskId(id)}
             onStartTimer={handleStartTimer}
+            onPauseTimer={handlePauseTimer}
+            onResumeTimer={handleResumeTimer}
             onStopTimer={handleStopTimer}
             onToggleStar={handleToggleStar}
             onRefresh={refreshAll}
