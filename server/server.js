@@ -167,6 +167,27 @@ async function getNextTicketKey(prefix = 'TSK') {
   return `${prefix}-${String(nextNum).padStart(3, '0')}`;
 }
 
+function formatTaskResponse(taskDoc) {
+  if (!taskDoc) return null;
+  const resObj = taskDoc.toObject ? taskDoc.toObject() : { ...taskDoc };
+  resObj.id = resObj._id ? resObj._id.toString() : resObj.id;
+  if (Array.isArray(resObj.stages)) {
+    resObj.stages = resObj.stages.map((st) => {
+      const stObj = st.toObject ? st.toObject() : { ...st };
+      stObj.id = stObj._id ? stObj._id.toString() : stObj.id;
+      if (Array.isArray(stObj.tasks)) {
+        stObj.tasks = stObj.tasks.map((subT) => {
+          const subObj = subT.toObject ? subT.toObject() : { ...subT };
+          subObj.id = subObj._id ? subObj._id.toString() : subObj.id;
+          return subObj;
+        });
+      }
+      return stObj;
+    });
+  }
+  return resObj;
+}
+
 // -------------------------------------------------------------
 // ROUTINE AUTO-OCCURRENCE ENGINE
 // Automatically evaluates recurring routines and creates actionable
@@ -404,7 +425,11 @@ app.get('/api/tasks', async (req, res) => {
           completed += sDone;
           return {
             ...st,
-            id: st._id?.toString(),
+            id: st._id?.toString() || st.id,
+            tasks: (st.tasks || []).map((t) => ({
+              ...t,
+              id: t._id?.toString() || t.id
+            })),
             total_tasks: sTotal,
             completed_tasks: sDone,
             is_completed: sTotal > 0 && sDone === sTotal
@@ -443,7 +468,11 @@ app.get('/api/tasks/:id', async (req, res) => {
         completed += sDone;
         return {
           ...st,
-          id: st._id?.toString(),
+          id: st._id?.toString() || st.id,
+          tasks: (st.tasks || []).map((t) => ({
+            ...t,
+            id: t._id?.toString() || t.id
+          })),
           total_tasks: sTotal,
           completed_tasks: sDone,
           is_completed: sTotal > 0 && sDone === sTotal
@@ -597,9 +626,7 @@ app.post('/api/tasks', async (req, res) => {
       details: `Created ${ticket_key}: ${title} (${workspace} • ${orbita_type})`
     });
 
-    const resObj = task.toObject();
-    resObj.id = resObj._id.toString();
-    res.status(201).json(resObj);
+    res.status(201).json(formatTaskResponse(task));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -865,11 +892,7 @@ app.put('/api/projects/:id/stages/:stageId/tasks/:taskId', async (req, res) => {
       details: `Marked task "${task.title}" as ${is_completed ? 'Completed' : 'Pending'}`
     });
 
-    res.json({
-      message: 'Stage task updated',
-      is_stage_completed: stageDone,
-      is_project_completed: projectDone
-    });
+    res.json(formatTaskResponse(project));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -887,6 +910,109 @@ app.delete('/api/projects/:id/stages/:stageId/tasks/:taskId', async (req, res) =
     stage.tasks.pull(req.params.taskId);
     await project.save();
 
+    res.json({ message: 'Stage task deleted' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Flat stage task endpoints for direct manipulation
+app.post('/api/stages/:stageId/tasks', async (req, res) => {
+  try {
+    const { title, assignee, due_date } = req.body;
+    if (!title || !title.trim()) return res.status(400).json({ error: 'Task title is required' });
+
+    const project = await Task.findOne({ 'stages._id': req.params.stageId });
+    if (!project) return res.status(404).json({ error: 'Stage / Project not found' });
+
+    const stage = project.stages.id(req.params.stageId);
+    if (!stage) return res.status(404).json({ error: 'Stage not found' });
+
+    let totalTasksCount = 0;
+    project.stages.forEach((s) => {
+      totalTasksCount += s.tasks?.length || 0;
+    });
+
+    stage.tasks.push({
+      ticket_key: `${project.ticket_key}-T${totalTasksCount + 1}`,
+      title: title.trim(),
+      is_completed: false,
+      assignee: assignee || project.assignee,
+      due_date: due_date || project.due_date,
+      is_urgent: project.is_urgent,
+      is_important: project.is_important,
+      priority_quadrant: project.priority_quadrant,
+      priority: project.priority,
+      is_timer_allowed: true,
+      order_index: (stage.tasks?.length || 0) + 1
+    });
+
+    stage.is_completed = false;
+    project.status = 'Active';
+
+    await project.save();
+    res.status(201).json(formatTaskResponse(project));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/api/stage-tasks/:taskId', async (req, res) => {
+  try {
+    const project = await Task.findOne({ 'stages.tasks._id': req.params.taskId });
+    if (!project) return res.status(404).json({ error: 'Stage task not found' });
+
+    let targetStage = null;
+    let targetTask = null;
+
+    for (const st of project.stages) {
+      const found = st.tasks.id(req.params.taskId);
+      if (found) {
+        targetStage = st;
+        targetTask = found;
+        break;
+      }
+    }
+
+    if (!targetTask) return res.status(404).json({ error: 'Task not found' });
+
+    const { is_completed, title, assignee, due_date } = req.body;
+    if (is_completed !== undefined) {
+      targetTask.is_completed = Boolean(is_completed);
+      targetTask.completed_at = is_completed ? new Date() : null;
+    }
+    if (title !== undefined) targetTask.title = title.trim();
+    if (assignee !== undefined) targetTask.assignee = assignee;
+    if (due_date !== undefined) targetTask.due_date = due_date;
+
+    targetStage.is_completed = targetStage.tasks.every((t) => t.is_completed);
+    let allProjectTasks = [];
+    project.stages.forEach((s) => {
+      if (s.tasks) allProjectTasks.push(...s.tasks);
+    });
+    project.status = allProjectTasks.every((t) => t.is_completed) ? 'Completed' : 'Active';
+
+    await project.save();
+    res.json(formatTaskResponse(project));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/stage-tasks/:taskId', async (req, res) => {
+  try {
+    const project = await Task.findOne({ 'stages.tasks._id': req.params.taskId });
+    if (!project) return res.status(404).json({ error: 'Stage task not found' });
+
+    for (const st of project.stages) {
+      const found = st.tasks.id(req.params.taskId);
+      if (found) {
+        st.tasks.pull(req.params.taskId);
+        break;
+      }
+    }
+
+    await project.save();
     res.json({ message: 'Stage task deleted' });
   } catch (err) {
     res.status(500).json({ error: err.message });
