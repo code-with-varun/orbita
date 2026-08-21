@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: orbita-backend
+    env: node
+    region: singapore
+    buildCommand: npm install
+    startCommand: node server/server.js
+    envVars:
+      - key: PORT
+        value: 5001
+      - key: MONGODB_URI
+        sync: false
+      - key: JWT_SECRET
+        sync: false
