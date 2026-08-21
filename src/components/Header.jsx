@@ -212,10 +212,12 @@ export default function Header({
           {theme === 'dark' ? <Sun size={16} color="var(--accent-amber)" /> : <Moon size={16} color="var(--accent-blue)" />}
         </button>
 
-        {/* Global New Item Button */}
-        <button className="btn btn-primary" onClick={onOpenTaskModal}>
-          <Plus size={16} /> New Item
-        </button>
+        {/* Global New Item Button (Members / Admins) */}
+        {!isSuperadmin && (
+          <button className="btn btn-primary" onClick={onOpenTaskModal}>
+            <Plus size={16} /> New Item
+          </button>
+        )}
 
         {/* User Profile Badge */}
         {currentUser ? (

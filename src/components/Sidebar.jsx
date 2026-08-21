@@ -22,15 +22,23 @@ import { OrbitaIcon } from './OrbitaLogo';
 export default function Sidebar({ activeView, setActiveView, stats, currentUser }) {
   const isSuperadmin = currentUser?.role === 'Superadmin';
 
-  const superAdminSection = {
-    label: '🛡️ Superadmin Control Center',
-    items: [
-      { id: 'admin_center', label: 'Superadmin Command Center', icon: ShieldCheck },
-      { id: 'admin_users', label: 'User Governance & Roles', icon: Users },
-      { id: 'admin_backups', label: 'Data Backups & Dumps', icon: Database },
-      { id: 'admin_maintenance', label: 'System Reset & Maintenance', icon: Server }
-    ]
-  };
+  const superAdminSections = [
+    {
+      label: '🛡️ Superadmin Governance',
+      items: [
+        { id: 'admin_center', label: 'Superadmin Command Center', icon: ShieldCheck },
+        { id: 'admin_users', label: 'User Governance & Roles', icon: Users },
+        { id: 'admin_backups', label: 'Data Backups & Dumps', icon: Database },
+        { id: 'admin_maintenance', label: 'System Reset & Maintenance', icon: Server }
+      ]
+    },
+    {
+      label: 'System Audit',
+      items: [
+        { id: 'audit_logs', label: 'Global Activity & Audit Logs', icon: ShieldAlert }
+      ]
+    }
+  ];
 
   const standardNavSections = [
     {
@@ -67,13 +75,11 @@ export default function Sidebar({ activeView, setActiveView, stats, currentUser 
     }
   ];
 
-  const navSections = isSuperadmin
-    ? [superAdminSection, ...standardNavSections]
-    : standardNavSections;
+  const navSections = isSuperadmin ? superAdminSections : standardNavSections;
 
   return (
     <aside className="sidebar">
-      <div className="brand" style={{ cursor: 'pointer', padding: '0.4rem 0' }} onClick={() => setActiveView('dashboard')}>
+      <div className="brand" style={{ cursor: 'pointer', padding: '0.4rem 0' }} onClick={() => setActiveView(isSuperadmin ? 'admin_center' : 'dashboard')}>
         <div style={{
           width: '38px',
           height: '38px',
