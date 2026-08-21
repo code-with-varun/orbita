@@ -11,12 +11,28 @@ import {
   Grid,
   Trophy,
   Table,
-  Kanban
+  Kanban,
+  ShieldCheck,
+  Users,
+  Database,
+  Server
 } from 'lucide-react';
 import { OrbitaIcon } from './OrbitaLogo';
 
-export default function Sidebar({ activeView, setActiveView, stats }) {
-  const navSections = [
+export default function Sidebar({ activeView, setActiveView, stats, currentUser }) {
+  const isSuperadmin = currentUser?.role === 'Superadmin';
+
+  const superAdminSection = {
+    label: '🛡️ Superadmin Control Center',
+    items: [
+      { id: 'admin_center', label: 'Superadmin Command Center', icon: ShieldCheck },
+      { id: 'admin_users', label: 'User Governance & Roles', icon: Users },
+      { id: 'admin_backups', label: 'Data Backups & Dumps', icon: Database },
+      { id: 'admin_maintenance', label: 'System Reset & Maintenance', icon: Server }
+    ]
+  };
+
+  const standardNavSections = [
     {
       label: 'Overview & Insights',
       items: [
@@ -50,6 +66,10 @@ export default function Sidebar({ activeView, setActiveView, stats }) {
       ]
     }
   ];
+
+  const navSections = isSuperadmin
+    ? [superAdminSection, ...standardNavSections]
+    : standardNavSections;
 
   return (
     <aside className="sidebar">

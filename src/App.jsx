@@ -10,6 +10,7 @@ import TicketGridView from './components/TicketGridView';
 import CalendarView from './components/CalendarView';
 import TimesheetView from './components/TimesheetView';
 import AuditLogsView from './components/AuditLogsView';
+import SuperAdminCenterView from './components/SuperAdminCenterView';
 
 import TaskFormModal from './components/TaskFormModal';
 import TaskDetailModal from './components/TaskDetailModal';
@@ -66,7 +67,16 @@ export default function App() {
     localStorage.setItem('orbita_user', JSON.stringify(user));
     setIsAuthModalOpen(false);
     showToast(`Welcome to Orbita, ${user.name}!`, 'success');
+    if (user.role === 'Superadmin') {
+      setActiveView('admin_center');
+    }
   };
+
+  useEffect(() => {
+    if (currentUser?.role === 'Superadmin' && activeView === 'dashboard') {
+      setActiveView('admin_center');
+    }
+  }, [currentUser]);
 
   const handleLogout = () => {
     setCurrentUser(null);
@@ -298,7 +308,7 @@ export default function App() {
 
   return (
     <div className="app-container">
-      <Sidebar activeView={activeView} setActiveView={setActiveView} stats={stats} />
+      <Sidebar activeView={activeView} setActiveView={setActiveView} stats={stats} currentUser={currentUser} />
 
       <div className="main-wrapper">
         <Header
@@ -481,6 +491,15 @@ export default function App() {
         {/* Audit Logs */}
         {activeView === 'audit_logs' && (
           <AuditLogsView currentUser={currentUser} onSelectTask={(id) => setSelectedTaskId(id)} />
+        )}
+
+        {/* Superadmin Control Center */}
+        {['admin_center', 'admin_users', 'admin_backups', 'admin_maintenance'].includes(activeView) && (
+          <SuperAdminCenterView
+            currentUser={currentUser}
+            onResetDatabase={handleResetDatabase}
+            onRefresh={refreshAll}
+          />
         )}
       </div>
 

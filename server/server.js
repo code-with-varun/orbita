@@ -26,26 +26,169 @@ app.use(express.json());
 await connectDb();
 
 // -------------------------------------------------------------
-// SYSTEM RESET (SUPERADMIN ONLY)
+// SUPERADMIN COMMAND CENTER & GOVERNANCE
 // -------------------------------------------------------------
 
-app.post('/api/system/reset', async (req, res) => {
+app.get('/api/admin/overview', async (req, res) => {
   try {
-    const { user_email, user_role, user_name } = req.body;
+    const totalUsers = await User.countDocuments();
+    const membersCount = await User.countDocuments({ role: 'Member' });
+    const adminCount = await User.countDocuments({ role: 'Admin' });
+    const superadminCount = await User.countDocuments({ role: 'Superadmin' });
 
-    if (user_email) {
-      const user = await User.findOne({ email: user_email.toLowerCase().trim() });
-      if (!user || user.role !== 'Superadmin') {
-        return res.status(403).json({ error: 'Access Denied: Only a Super Admin can reset the system.' });
+    const totalTasks = await Task.countDocuments();
+    const tasksCount = await Task.countDocuments({ orbita_type: 'Task' });
+    const routinesCount = await Task.countDocuments({ orbita_type: 'Routine' });
+    const goalsCount = await Task.countDocuments({ orbita_type: 'Goal' });
+    const projectsCount = await Task.countDocuments({ orbita_type: 'Project' });
+
+    const totalSessions = await TimeSession.countDocuments();
+    const sessions = await TimeSession.find();
+    const totalSeconds = sessions.reduce((acc, s) => acc + (s.duration_seconds || 0), 0);
+    const totalFocusHours = Math.round((totalSeconds / 3600) * 100) / 100;
+
+    const totalAuditLogs = await AuditLog.countDocuments();
+    const activeTimers = await Task.countDocuments({ is_timer_running: true });
+
+    res.json({
+      system_health: 'Optimal',
+      database_status: 'Connected (MongoDB Atlas)',
+      database_name: 'orbita',
+      users: {
+        total: totalUsers,
+        member: membersCount,
+        admin: adminCount,
+        superadmin: superadminCount
+      },
+      work_items: {
+        total: totalTasks,
+        tasks: tasksCount,
+        routines: routinesCount,
+        goals: goalsCount,
+        projects: projectsCount
+      },
+      effort: {
+        total_sessions: totalSessions,
+        total_focus_hours: totalFocusHours,
+        active_running_timers: activeTimers
+      },
+      governance: {
+        total_audit_logs: totalAuditLogs
       }
-    } else if (user_role && user_role !== 'Superadmin') {
-      return res.status(403).json({ error: 'Access Denied: Only a Super Admin can reset the system.' });
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/admin/users', async (req, res) => {
+  try {
+    const users = await User.find().sort({ createdAt: -1 });
+    const enriched = await Promise.all(
+      users.map(async (u) => {
+        const uidStr = u._id.toString();
+        const taskCount = await Task.countDocuments({
+          $or: [{ user_id: uidStr }, { user_email: u.email }, { created_by: u.name }]
+        });
+        const sessions = await TimeSession.find({
+          $or: [{ user_id: uidStr }, { user_email: u.email }, { user_name: u.name }]
+        });
+        const totalSecs = sessions.reduce((acc, s) => acc + (s.duration_seconds || 0), 0);
+
+        return {
+          id: uidStr,
+          name: u.name,
+          email: u.email,
+          role: u.role,
+          createdAt: u.createdAt,
+          task_count: taskCount,
+          logged_hours: Math.round((totalSecs / 3600) * 100) / 100
+        };
+      })
+    );
+
+    res.json(enriched);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/api/admin/users/:id/role', async (req, res) => {
+  try {
+    const { role, updated_by } = req.body;
+    if (!['Member', 'Admin', 'Superadmin'].includes(role)) {
+      return res.status(400).json({ error: 'Invalid role specified' });
     }
 
-    await cleanResetDatabase(user_name || 'Super Admin');
+    const user = await User.findById(req.params.id);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    const prevRole = user.role;
+    user.role = role;
+    await user.save();
+
+    await AuditLog.create({
+      user_id: user._id.toString(),
+      user_email: user.email,
+      user_name: updated_by || 'Super Admin',
+      action: 'User Role Updated',
+      details: `Changed role for user ${user.email} from ${prevRole} to ${role}`
+    });
+
+    res.json({ message: 'User role updated successfully', user: { id: user._id, name: user.name, email: user.email, role: user.role } });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/admin/users/:id', async (req, res) => {
+  try {
+    const { updated_by } = req.body || {};
+    const user = await User.findById(req.params.id);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    if (user.email.toLowerCase() === 'superadmin@orbita.com') {
+      return res.status(400).json({ error: 'Primary Superadmin account cannot be deleted' });
+    }
+
+    await User.findByIdAndDelete(req.params.id);
+
+    await AuditLog.create({
+      user_name: updated_by || 'Super Admin',
+      action: 'User Account Deleted',
+      details: `Deleted user account: ${user.name} (${user.email})`
+    });
+
+    res.json({ message: 'User account deleted successfully' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/admin/backups/dump', async (req, res) => {
+  try {
+    const users = await User.find({}, '-password_hash');
+    const tasks = await Task.find();
+    const sessions = await TimeSession.find();
+    const logs = await AuditLog.find();
+
     res.json({
-      message: 'Fresh setup complete! System reset to initial state with Super Admin preserved.',
-      superadmin: 'superadmin@orbita.com'
+      backup_timestamp: new Date().toISOString(),
+      platform: 'Orbita Work Management Platform',
+      provider: 'Runit Infotech',
+      database: 'orbita (MongoDB Atlas)',
+      record_counts: {
+        users: users.length,
+        work_items: tasks.length,
+        focus_sessions: sessions.length,
+        audit_logs: logs.length
+      },
+      data: {
+        users,
+        work_items: tasks,
+        focus_sessions: sessions,
+        audit_logs: logs
+      }
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
