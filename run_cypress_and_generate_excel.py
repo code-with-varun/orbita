@@ -30,16 +30,15 @@ def api_call(method, path, body=None):
         return {'status_code': 500, 'data': {'error': str(e)}}
 
 def run_cypress_headed_tests():
-    print("Executing Cypress E2E Tests (Headed Browser Mode)...")
+    print("Executing Cypress E2E Tests (Headed / Automated Mode)...")
     try:
-        # Run Cypress headed via cmd npx cypress run --headed --browser electron
-        cmd = 'npx cypress run --headed --browser electron'
-        result = subprocess.run(cmd, shell=True, cwd=os.getcwd(), capture_output=True, text=True, encoding='utf-8', errors='ignore', timeout=90)
+        cmd = 'cmd /c npx cypress run --browser electron'
+        result = subprocess.run(cmd, shell=True, cwd=os.getcwd(), capture_output=True, text=True, encoding='utf-8', errors='ignore', timeout=180)
         print("Cypress stdout snippet:")
         print(result.stdout[:500] if result.stdout else "No stdout output")
         return result.returncode == 0, result.stdout if result.stdout else "Cypress execution completed"
     except Exception as e:
-        print("Cypress headed run note:", e)
+        print("Cypress run note:", e)
         return False, str(e)
 
 def perform_end_to_end_audit():
@@ -269,9 +268,15 @@ def generate_excel_report(audit_results, cypress_passed, cypress_logs):
     ws2.column_dimensions['A'].width = 30
     ws2.column_dimensions['B'].width = 110
 
-    wb.save(file_path)
-    print(f"\nExcel Functionality Checklist successfully saved at:\n{file_path}")
-    return file_path
+    try:
+        wb.save(file_path)
+        print(f"\nExcel Functionality Checklist successfully saved at:\n{file_path}")
+        return file_path
+    except PermissionError:
+        alt_path = file_path.replace('.xlsx', '_Updated.xlsx')
+        wb.save(alt_path)
+        print(f"\nExcel Functionality Checklist successfully saved at:\n{alt_path}")
+        return alt_path
 
 if __name__ == '__main__':
     cypress_passed, cypress_logs = run_cypress_headed_tests()

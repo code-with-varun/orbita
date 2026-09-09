@@ -274,6 +274,9 @@ function buildUserFilter(req, entityType = 'task') {
   const conditions = [];
   if (user_id && user_id !== 'undefined' && user_id !== 'null' && user_id !== '') {
     conditions.push({ user_id });
+    if (mongoose.Types.ObjectId.isValid(user_id)) {
+      conditions.push({ user_id: new mongoose.Types.ObjectId(user_id) });
+    }
   }
   if (user_email && user_email !== 'undefined' && user_email !== 'null' && user_email !== '') {
     conditions.push({ user_email: user_email.toLowerCase().trim() });
@@ -296,24 +299,34 @@ function buildUserFilter(req, entityType = 'task') {
 
 // Helper to generate unique sequential ticket keys with zero collision
 async function getNextTicketKey(prefix = 'TSK') {
-  const latest = await Task.findOne({ ticket_key: new RegExp(`^${prefix}-\\d+$`) }).sort({ _id: -1 });
-  let nextNum = 1;
-  if (latest && latest.ticket_key) {
-    const parts = latest.ticket_key.split('-');
-    if (parts.length === 2 && !isNaN(parseInt(parts[1], 10))) {
-      nextNum = parseInt(parts[1], 10) + 1;
+  try {
+    const allKeys = await Task.find({ ticket_key: new RegExp(`^${prefix}-\\d+$`) }, { ticket_key: 1 }).lean();
+    let maxNum = 0;
+    for (const item of allKeys) {
+      if (item && item.ticket_key) {
+        const parts = item.ticket_key.split('-');
+        if (parts.length === 2) {
+          const num = parseInt(parts[1], 10);
+          if (!isNaN(num) && num > maxNum) {
+            maxNum = num;
+          }
+        }
+      }
     }
+    const nextNum = maxNum + 1;
+    return `${prefix}-${String(nextNum).padStart(3, '0')}`;
+  } catch (e) {
+    return `${prefix}-${Date.now().toString().slice(-4)}`;
   }
-  while (await Task.findOne({ ticket_key: `${prefix}-${String(nextNum).padStart(3, '0')}` })) {
-    nextNum++;
-  }
-  return `${prefix}-${String(nextNum).padStart(3, '0')}`;
 }
 
 function formatTaskResponse(taskDoc) {
   if (!taskDoc) return null;
   const resObj = taskDoc.toObject ? taskDoc.toObject() : { ...taskDoc };
   resObj.id = resObj._id ? resObj._id.toString() : resObj.id;
+  if (resObj.routine_id) {
+    resObj.routine_id = resObj.routine_id.toString();
+  }
   if (Array.isArray(resObj.stages)) {
     resObj.stages = resObj.stages.map((st) => {
       const stObj = st.toObject ? st.toObject() : { ...st };
@@ -477,38 +490,50 @@ async function generateRoutineOccurrences(userFilter = {}) {
         if (isMatch) {
           // Check if an occurrence task already exists for this routine and date
           const existing = await Task.findOne({
-            routine_id: routine._id,
+            routine_id: { $in: [routine._id, routine._id.toString()] },
             routine_occurrence_date: dateStr
           });
 
           if (!existing) {
-            // Generate distinct collision-free ticket key
-            const ticket_key = await getNextTicketKey('TSK');
+            let created = false;
+            let attempts = 0;
+            while (!created && attempts < 5) {
+              try {
+                attempts++;
+                const ticket_key = await getNextTicketKey('TSK');
 
-            await Task.create({
-              ticket_key,
-              orbita_type: 'Task',
-              routine_id: routine._id,
-              routine_occurrence_date: dateStr,
-              title: routine.title,
-              description: routine.description || `Routine occurrence for ${dateStr} (${routine.recurrence_type || 'Daily'})`,
-              tags: routine.tags ? `${routine.tags}, Routine` : 'Routine',
-              workspace: routine.workspace || 'Personal',
-              priority_quadrant: routine.priority_quadrant || 'Q3',
-              priority: routine.priority || 'Medium',
-              status: 'Active',
-              assignee: routine.assignee || 'Unassigned',
-              user_id: routine.user_id,
-              user_email: routine.user_email,
-              created_by: routine.created_by || 'User',
-              scheduled_date: dateStr,
-              due_date: dateStr,
-              is_urgent: routine.is_urgent || false,
-              is_important: routine.is_important || false,
-              is_timer_allowed: false,
-              is_starred: false,
-              notes: routine.notes || ''
-            });
+                await Task.create({
+                  ticket_key,
+                  orbita_type: 'Task',
+                  routine_id: routine._id.toString(),
+                  routine_occurrence_date: dateStr,
+                  title: routine.title,
+                  description: routine.description || `Routine occurrence for ${dateStr} (${routine.recurrence_type || 'Daily'})`,
+                  tags: routine.tags ? `${routine.tags}, Routine` : 'Routine',
+                  workspace: routine.workspace || 'Personal',
+                  priority_quadrant: routine.priority_quadrant || 'Q3',
+                  priority: routine.priority || 'Medium',
+                  status: 'Active',
+                  assignee: routine.assignee || 'Unassigned',
+                  user_id: routine.user_id,
+                  user_email: routine.user_email,
+                  created_by: routine.created_by || 'User',
+                  scheduled_date: dateStr,
+                  due_date: dateStr,
+                  is_urgent: routine.is_urgent || false,
+                  is_important: routine.is_important || false,
+                  is_timer_allowed: false,
+                  is_starred: false,
+                  notes: routine.notes || ''
+                });
+                created = true;
+              } catch (createErr) {
+                if (createErr.code === 11000 && attempts < 5) {
+                  continue;
+                }
+                throw createErr;
+              }
+            }
           }
         }
       }
@@ -556,6 +581,7 @@ app.get('/api/tasks', async (req, res) => {
     const enriched = items.map((doc) => {
       const item = doc.toObject();
       item.id = item._id.toString();
+      if (item.routine_id) item.routine_id = item.routine_id.toString();
 
       if (item.orbita_type === 'Project' && item.stages) {
         let total = 0;
@@ -768,6 +794,14 @@ app.post('/api/tasks', async (req, res) => {
       action: `${orbita_type} Created`,
       details: `Created ${ticket_key}: ${title} (${workspace} • ${orbita_type})`
     });
+
+    if (orbita_type === 'Routine') {
+      try {
+        await generateRoutineOccurrences(task.user_id ? { user_id: task.user_id } : {});
+      } catch (genErr) {
+        console.error('Routine occurrence generation error:', genErr.message);
+      }
+    }
 
     res.status(201).json(formatTaskResponse(task));
   } catch (err) {

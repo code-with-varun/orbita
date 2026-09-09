@@ -127,7 +127,22 @@ export default function TodoView({
           <p className="page-subtitle">{description}</p>
         </div>
 
-        <div style={{ display: 'flex', gap: '0.75rem' }}>
+        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+          {typeFilterDefault === 'Routine' && (
+            <button
+              className="btn btn-secondary"
+              onClick={() => {
+                fetch('/api/routines/generate', { method: 'POST' })
+                  .then((res) => res.json())
+                  .then(() => onRefresh())
+                  .catch((err) => console.error(err));
+              }}
+              style={{ fontSize: '0.8rem', background: 'rgba(124, 58, 237, 0.15)', color: 'var(--accent-purple)', border: '1px solid rgba(124, 58, 237, 0.3)' }}
+            >
+              <Repeat size={14} /> Run Generator Now
+            </button>
+          )}
+
           <select className="select-input" value={filterWorkspace} onChange={(e) => setFilterWorkspace(e.target.value)}>
             <option value="">All Workspaces</option>
             <option value="Personal">Personal</option>
