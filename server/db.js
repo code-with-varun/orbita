@@ -1,14 +1,8 @@
-import dns from 'dns';
 import mongoose from 'mongoose';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
-
-try {
-  dns.setServers(['8.8.8.8', '1.1.1.1']);
-} catch (e) {
-  // Ignore DNS set errors if restricted
-}
+import dns from 'dns';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -18,8 +12,13 @@ const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://varunakshay23:VAva
 
 export async function connectDb() {
   try {
+    try {
+      dns.setServers(['8.8.8.8', '1.1.1.1']);
+    } catch (dnsErr) {
+      // Ignore if DNS custom servers fails
+    }
     await mongoose.connect(MONGODB_URI, {
-      serverSelectionTimeoutMS: 8000,
+      serverSelectionTimeoutMS: 12000,
     });
     console.log('Connected to MongoDB Atlas successfully (orbita database)');
     await ensureSuperadmin();

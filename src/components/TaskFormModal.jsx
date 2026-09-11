@@ -127,26 +127,6 @@ export default function TaskFormModal({ isOpen, onClose, onRefresh, currentUser,
       return;
     }
 
-    let finalRecurrenceInterval = 1;
-    let finalRecurrenceDay = '';
-
-    if (orbitaType === 'Routine') {
-      finalRecurrenceInterval = Math.max(1, parseInt(recurrenceInterval, 10) || 1);
-      if (recurrenceType === 'Daily') {
-        finalRecurrenceDay = dailyOption;
-      } else if (recurrenceType === 'Weekly') {
-        finalRecurrenceDay = weeklyDays.length > 0 ? weeklyDays.join(', ') : 'Mon';
-      } else if (recurrenceType === 'Monthly') {
-        if (monthlyMode === 'day_of_month') {
-          finalRecurrenceDay = monthlyDay;
-        } else {
-          finalRecurrenceDay = `ordinal_${monthlyOrdinalPos}_${monthlyOrdinalDay}`;
-        }
-      } else if (recurrenceType === 'Yearly') {
-        finalRecurrenceDay = `${yearlyMonth}/${yearlyDay}`;
-      }
-    }
-
     const payload = {
       title: title.trim(),
       description,
@@ -159,9 +139,8 @@ export default function TaskFormModal({ isOpen, onClose, onRefresh, currentUser,
       status: 'Active',
       assignee: assignee.trim() || currentUser?.name || 'User',
       created_by: currentUser?.name || 'User',
-      user_id: currentUser?.id || currentUser?._id || null,
+      user_id: currentUser?.id || null,
       user_email: currentUser?.email || null,
-      user_role: currentUser?.role || null,
       scheduled_date: scheduledDate || null,
       due_date: dueDate || null,
       recurrence_type: orbitaType === 'Routine' ? recurrenceType : null,
