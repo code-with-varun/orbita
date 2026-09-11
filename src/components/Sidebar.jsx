@@ -75,7 +75,7 @@ export default function Sidebar({ activeView, setActiveView, stats, currentUser 
     }
   ];
 
-  const navSections = isSuperadmin ? superAdminSections : standardNavSections;
+  const navSections = isSuperadmin ? [...superAdminSections, ...standardNavSections] : standardNavSections;
 
   return (
     <aside className="sidebar">
