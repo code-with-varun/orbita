@@ -221,7 +221,7 @@ app.post('/api/auth/register', async (req, res) => {
 
     res.status(201).json({
       message: 'Registration successful',
-      user: { id: user._id, name: user.name, email: user.email, role: user.role }
+      user: { id: user._id.toString(), name: user.name, email: user.email, role: user.role }
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -243,7 +243,7 @@ app.post('/api/auth/login', async (req, res) => {
 
     res.json({
       message: 'Login successful',
-      user: { id: user._id, name: user.name, email: user.email, role: user.role }
+      user: { id: user._id.toString(), name: user.name, email: user.email, role: user.role }
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -753,6 +753,17 @@ app.post('/api/tasks', async (req, res) => {
         }));
     }
 
+    let final_user_id = null;
+    if (req.body.user_id && req.body.user_id !== 'undefined' && req.body.user_id !== 'null' && req.body.user_id !== '') {
+      try {
+        if (mongoose.Types.ObjectId.isValid(req.body.user_id)) {
+          final_user_id = new mongoose.Types.ObjectId(req.body.user_id);
+        }
+      } catch (e) {
+        final_user_id = null;
+      }
+    }
+
     const task = await Task.create({
       ticket_key,
       orbita_type,
@@ -766,7 +777,7 @@ app.post('/api/tasks', async (req, res) => {
       priority: final_priority,
       status,
       assignee,
-      user_id: req.body.user_id || null,
+      user_id: final_user_id,
       user_email: req.body.user_email ? req.body.user_email.toLowerCase().trim() : null,
       created_by: created_by || req.body.user_name || 'User',
       scheduled_date: scheduled_date || null,
