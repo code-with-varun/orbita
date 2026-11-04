@@ -80,7 +80,7 @@ export default function TicketGridView({ tasks, loading = false, onSelectTask, o
         </div>
 
         {/* Dump / Export Buttons */}
-        <div style={{ display: 'flex', gap: '0.6rem' }}>
+        <div style={{ display: 'flex', gap: '0.6rem', flexShrink: 0 }}>
           <button className="btn btn-secondary" onClick={handleExportCsv} title="Export current table to CSV">
             <FileSpreadsheet size={15} color="var(--accent-green)" /> Export CSV
           </button>
@@ -130,140 +130,155 @@ export default function TicketGridView({ tasks, loading = false, onSelectTask, o
           <table className="data-table">
             <thead>
               <tr>
-                <th onClick={() => handleSort('ticket_key')} style={{ cursor: 'pointer' }}>
+                <th onClick={() => handleSort('ticket_key')} style={{ cursor: 'pointer', whiteSpace: 'nowrap' }}>
                   ID {renderSortIcon('ticket_key')}
                 </th>
-              <th onClick={() => handleSort('title')} style={{ cursor: 'pointer' }}>
-                Title {renderSortIcon('title')}
-              </th>
-              <th>Type</th>
-              <th>Workspace</th>
-              <th>Tags</th>
-              <th>Quadrant</th>
-              <th onClick={() => handleSort('priority')} style={{ cursor: 'pointer' }}>
-                Priority {renderSortIcon('priority')}
-              </th>
-              <th onClick={() => handleSort('status')} style={{ cursor: 'pointer' }}>
-                Status {renderSortIcon('status')}
-              </th>
-              <th>Assignee</th>
-              <th>Focus Effort</th>
-              <th onClick={() => handleSort('due_date')} style={{ cursor: 'pointer' }}>
-                Due Date {renderSortIcon('due_date')}
-              </th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {sortedTasks.length === 0 ? (
-              <tr>
-                <td colSpan={12} style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>
-                  No items found in grid.
-                </td>
+                <th onClick={() => handleSort('title')} style={{ cursor: 'pointer', minWidth: '220px' }}>
+                  Title {renderSortIcon('title')}
+                </th>
+                <th style={{ whiteSpace: 'nowrap' }}>Type</th>
+                <th style={{ whiteSpace: 'nowrap' }}>Workspace</th>
+                <th style={{ whiteSpace: 'nowrap' }}>Tags</th>
+                <th style={{ whiteSpace: 'nowrap' }}>Quadrant</th>
+                <th onClick={() => handleSort('priority')} style={{ cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                  Priority {renderSortIcon('priority')}
+                </th>
+                <th onClick={() => handleSort('status')} style={{ cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                  Status {renderSortIcon('status')}
+                </th>
+                <th style={{ whiteSpace: 'nowrap' }}>Assignee</th>
+                <th style={{ whiteSpace: 'nowrap' }}>Focus Effort</th>
+                <th onClick={() => handleSort('due_date')} style={{ cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                  Due Date {renderSortIcon('due_date')}
+                </th>
+                <th style={{ whiteSpace: 'nowrap', textAlign: 'right' }}>Actions</th>
               </tr>
-            ) : (
-              sortedTasks.map((task) => (
-                <tr key={task.id}>
-                  <td>
-                    <span
-                      style={{ fontWeight: '800', color: 'var(--accent-blue)', cursor: 'pointer' }}
-                      onClick={() => onSelectTask(task.id)}
-                    >
-                      {task.ticket_key}
-                    </span>
+            </thead>
+            <tbody>
+              {sortedTasks.length === 0 ? (
+                <tr>
+                  <td colSpan={12} style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>
+                    No items found in grid.
                   </td>
-                  <td style={{ fontWeight: '600', maxWidth: '220px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                      <button
-                        onClick={() => onToggleStar && onToggleStar(task.id)}
-                        style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: task.is_starred ? 'var(--accent-amber)' : 'var(--text-dim)', padding: 0 }}
+                </tr>
+              ) : (
+                sortedTasks.map((task) => (
+                  <tr key={task.id}>
+                    <td style={{ whiteSpace: 'nowrap' }}>
+                      <span
+                        style={{ fontWeight: '800', color: 'var(--accent-blue)', cursor: 'pointer' }}
+                        onClick={() => onSelectTask(task.id)}
                       >
-                        <Star size={14} fill={task.is_starred ? 'currentColor' : 'none'} />
-                      </button>
-                      <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {task.title}
+                        {task.ticket_key}
                       </span>
-                    </div>
-                  </td>
-                  <td>
-                    <span className="badge badge-status" style={{ fontSize: '0.7rem' }}>
-                      {task.orbita_type}
-                    </span>
-                  </td>
-                  <td>
-                    <span className="badge badge-status" style={{ fontSize: '0.7rem' }}>
-                      {task.workspace}
-                    </span>
-                  </td>
-                  <td>
-                    {task.tags ? <span className="badge badge-status" style={{ fontSize: '0.65rem' }}>{task.tags}</span> : '-'}
-                  </td>
-                  <td>
-                    <span className="badge badge-status" style={{ fontSize: '0.7rem' }}>
-                      {task.priority_quadrant || 'Q2'}
-                    </span>
-                  </td>
-                  <td>
-                    <span className={`badge badge-priority-${task.priority ? task.priority.toLowerCase() : 'medium'}`}>
-                      {task.priority}
-                    </span>
-                  </td>
-                  <td>
-                    <select
-                      className="select-input"
-                      value={task.status}
-                      onChange={(e) => onUpdateTaskStatus(task.id, e.target.value)}
-                      style={{ fontSize: '0.75rem', padding: '0.2rem 0.4rem' }}
-                    >
-                      <option value="Active">Active</option>
-                      <option value="In Progress">In Progress</option>
-                      <option value="Paused">Paused</option>
-                      <option value="Completed">Completed</option>
-                    </select>
-                  </td>
-                  <td>{task.assignee || 'Unassigned'}</td>
-                  <td style={{ fontSize: '0.8rem' }}>
-                    {task.orbita_type === 'Goal' ? `${task.actual_hours || 0}h / ${task.target_hours || 0}h` : (task.is_timer_allowed ? `${task.actual_hours || 0}h` : '-')}
-                  </td>
-                  <td style={{ fontSize: '0.8rem' }}>{task.due_date || task.scheduled_date || '-'}</td>
-                  <td>
-                    <div style={{ display: 'flex', gap: '0.4rem' }}>
-                      {task.is_timer_allowed && task.status !== 'Completed' && task.orbita_type === 'Goal' ? (
+                    </td>
+                    <td style={{ fontWeight: '600', maxWidth: '280px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                        <button
+                          onClick={() => onToggleStar && onToggleStar(task.id)}
+                          style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: task.is_starred ? 'var(--accent-amber)' : 'var(--text-dim)', padding: 0 }}
+                          title={task.is_starred ? 'Starred milestone' : 'Mark as milestone'}
+                        >
+                          <Star size={14} fill={task.is_starred ? 'currentColor' : 'none'} />
+                        </button>
+                        <span
+                          style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', cursor: 'pointer' }}
+                          onClick={() => onSelectTask(task.id)}
+                          title={task.title}
+                        >
+                          {task.title}
+                        </span>
+                      </div>
+                    </td>
+                    <td style={{ whiteSpace: 'nowrap' }}>
+                      <span className="badge badge-status" style={{ fontSize: '0.7rem' }}>
+                        {task.orbita_type}
+                      </span>
+                    </td>
+                    <td style={{ whiteSpace: 'nowrap' }}>
+                      <span className="badge badge-status" style={{ fontSize: '0.7rem' }}>
+                        {task.workspace}
+                      </span>
+                    </td>
+                    <td style={{ whiteSpace: 'nowrap' }}>
+                      {task.tags ? <span className="badge badge-status" style={{ fontSize: '0.65rem' }}>{task.tags}</span> : '-'}
+                    </td>
+                    <td style={{ whiteSpace: 'nowrap' }}>
+                      <span className="badge badge-status" style={{ fontSize: '0.7rem' }}>
+                        {task.priority_quadrant || 'Q2'}
+                      </span>
+                    </td>
+                    <td style={{ whiteSpace: 'nowrap' }}>
+                      <span className={`badge badge-priority-${task.priority ? task.priority.toLowerCase() : 'medium'}`}>
+                        {task.priority}
+                      </span>
+                    </td>
+                    <td style={{ whiteSpace: 'nowrap' }}>
+                      <select
+                        className={`badge ${task.status === 'Completed' ? 'badge-success' : task.status === 'In Progress' ? 'badge-priority-medium' : task.status === 'Paused' ? 'badge-priority-low' : 'badge-priority-high'}`}
+                        value={task.status}
+                        onChange={(e) => onUpdateTaskStatus(task.id, e.target.value)}
+                        style={{
+                          cursor: 'pointer',
+                          padding: '0.28rem 0.6rem',
+                          fontSize: '0.74rem',
+                          fontWeight: '700',
+                          borderRadius: 'var(--radius-sm)',
+                          outline: 'none',
+                          border: '1px solid currentColor',
+                          background: task.status === 'Completed' ? 'rgba(16, 185, 129, 0.15)' : task.status === 'In Progress' ? 'rgba(245, 158, 11, 0.15)' : task.status === 'Paused' ? 'rgba(100, 116, 139, 0.15)' : 'rgba(59, 130, 246, 0.15)',
+                          color: task.status === 'Completed' ? 'var(--accent-green)' : task.status === 'In Progress' ? 'var(--accent-amber)' : task.status === 'Paused' ? 'var(--text-muted)' : 'var(--accent-blue)'
+                        }}
+                      >
+                        <option value="Active" style={{ background: 'var(--bg-card)', color: 'var(--accent-blue)' }}>Active</option>
+                        <option value="In Progress" style={{ background: 'var(--bg-card)', color: 'var(--accent-amber)' }}>In Progress</option>
+                        <option value="Paused" style={{ background: 'var(--bg-card)', color: 'var(--text-muted)' }}>Paused</option>
+                        <option value="Completed" style={{ background: 'var(--bg-card)', color: 'var(--accent-green)' }}>Completed</option>
+                      </select>
+                    </td>
+                    <td style={{ whiteSpace: 'nowrap' }}>{task.assignee || 'Unassigned'}</td>
+                    <td style={{ fontSize: '0.8rem', whiteSpace: 'nowrap' }}>
+                      {task.orbita_type === 'Goal' ? `${task.actual_hours || 0}h / ${task.target_hours || 0}h` : (task.is_timer_allowed ? `${task.actual_hours || 0}h` : '-')}
+                    </td>
+                    <td style={{ fontSize: '0.8rem', whiteSpace: 'nowrap' }}>{task.due_date || task.scheduled_date || '-'}</td>
+                    <td style={{ whiteSpace: 'nowrap', textAlign: 'right' }}>
+                      <div style={{ display: 'inline-flex', gap: '0.4rem', justifyContent: 'flex-end', alignItems: 'center' }}>
+                        {task.is_timer_allowed && task.status !== 'Completed' && task.orbita_type === 'Goal' ? (
+                          <button
+                            className="btn btn-secondary"
+                            style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem' }}
+                            onClick={() => onStartTimer(task.id)}
+                            title="Start Focus Timer"
+                          >
+                            <Play size={12} fill="currentColor" />
+                          </button>
+                        ) : null}
+
                         <button
                           className="btn btn-secondary"
                           style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem' }}
-                          onClick={() => onStartTimer(task.id)}
-                          title="Start Focus Timer"
+                          onClick={() => onSelectTask(task.id)}
+                          title="View / Edit Item"
                         >
-                          <Play size={12} fill="currentColor" />
+                          <ArrowUpRight size={12} />
                         </button>
-                      ) : null}
 
-                      <button
-                        className="btn btn-secondary"
-                        style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem' }}
-                        onClick={() => onSelectTask(task.id)}
-                        title="View / Edit Item"
-                      >
-                        <ArrowUpRight size={12} />
-                      </button>
-
-                      <button
-                        className="btn btn-danger"
-                        style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem' }}
-                        onClick={() => onDeleteTask(task.id)}
-                        title="Delete Item"
-                      >
-                        <Trash2 size={12} />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+                        <button
+                          className="btn btn-danger"
+                          style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem' }}
+                          onClick={() => onDeleteTask(task.id)}
+                          title="Delete Item"
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   );
