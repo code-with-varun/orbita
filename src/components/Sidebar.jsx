@@ -15,12 +15,25 @@ import {
   ShieldCheck,
   Users,
   Database,
-  Server
+  Server,
+  CreditCard,
+  KeyRound,
+  Contact
 } from 'lucide-react';
 import { OrbitaIcon } from './OrbitaLogo';
 
 export default function Sidebar({ activeView, setActiveView, stats, currentUser }) {
   const isSuperadmin = currentUser?.role === 'Superadmin';
+
+  const assetAndVaultSection = {
+    label: 'Assets, Vault & Contacts',
+    items: [
+      { id: 'subscriptions', label: 'Subscription Manager', icon: CreditCard },
+      { id: 'warranties', label: 'Warranty Manager', icon: ShieldCheck },
+      { id: 'credentials', label: 'Master Credential Vault', icon: KeyRound },
+      { id: 'contacts', label: 'Contact Manager', icon: Contact }
+    ]
+  };
 
   const superAdminSections = [
     {
@@ -32,6 +45,7 @@ export default function Sidebar({ activeView, setActiveView, stats, currentUser 
         { id: 'admin_maintenance', label: 'System Reset & Maintenance', icon: Server }
       ]
     },
+    assetAndVaultSection,
     {
       label: 'System Audit',
       items: [
@@ -66,6 +80,7 @@ export default function Sidebar({ activeView, setActiveView, stats, currentUser 
         { id: 'projects', label: 'Projects (Multi-Stage)', icon: FolderGit2, badge: stats?.projects_count ? `${stats.projects_count}` : null }
       ]
     },
+    assetAndVaultSection,
     {
       label: 'Effort & Audit',
       items: [

@@ -11,6 +11,10 @@ import CalendarView from './components/CalendarView';
 import TimesheetView from './components/TimesheetView';
 import AuditLogsView from './components/AuditLogsView';
 import SuperAdminCenterView from './components/SuperAdminCenterView';
+import SubscriptionManagerView from './components/SubscriptionManagerView';
+import WarrantyManagerView from './components/WarrantyManagerView';
+import CredentialManagerView from './components/CredentialManagerView';
+import ContactManagerView from './components/ContactManagerView';
 
 import TaskFormModal from './components/TaskFormModal';
 import TaskDetailModal from './components/TaskDetailModal';
@@ -491,6 +495,26 @@ export default function App() {
         {/* Audit Logs */}
         {activeView === 'audit_logs' && (
           <AuditLogsView currentUser={currentUser} onSelectTask={(id) => setSelectedTaskId(id)} />
+        )}
+
+        {/* 1. Subscription Manager */}
+        {activeView === 'subscriptions' && (
+          <SubscriptionManagerView currentUser={currentUser} onShowToast={showToast} />
+        )}
+
+        {/* 2. Warranty Manager */}
+        {activeView === 'warranties' && (
+          <WarrantyManagerView currentUser={currentUser} onShowToast={showToast} />
+        )}
+
+        {/* 3, 4, 5. Master Credential Manager Vault */}
+        {activeView === 'credentials' && (
+          <CredentialManagerView currentUser={currentUser} onShowToast={showToast} />
+        )}
+
+        {/* 6. Contact Manager with Duplicate Merge & Google Sync */}
+        {activeView === 'contacts' && (
+          <ContactManagerView currentUser={currentUser} onShowToast={showToast} />
         )}
 
         {/* Superadmin Control Center */}

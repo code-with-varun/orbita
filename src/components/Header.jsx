@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Plus,
   Square,
@@ -120,7 +120,25 @@ export default function Header({
   onResetDatabase
 }) {
   const [showUserDropdown, setShowUserDropdown] = useState(false);
+  const userDropdownRef = useRef(null);
   const isSuperadmin = currentUser?.role === 'Superadmin';
+
+  // Click-away listener to hide profile dropdown when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (userDropdownRef.current && !userDropdownRef.current.contains(event.target)) {
+        setShowUserDropdown(false);
+      }
+    }
+    if (showUserDropdown) {
+      document.addEventListener('mousedown', handleClickOutside);
+      document.addEventListener('touchstart', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+    };
+  }, [showUserDropdown]);
 
   const handleResetClick = () => {
     if (!isSuperadmin) {
@@ -221,7 +239,7 @@ export default function Header({
 
         {/* User Profile Badge */}
         {currentUser ? (
-          <div style={{ position: 'relative' }}>
+          <div style={{ position: 'relative' }} ref={userDropdownRef}>
             <div
               className="user-badge-header"
               onClick={() => setShowUserDropdown(!showUserDropdown)}

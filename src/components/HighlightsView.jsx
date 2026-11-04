@@ -91,62 +91,79 @@ export default function HighlightsView({ onSelectTask, refreshTrigger }) {
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '1.5rem', marginBottom: '2rem' }}>
-        {/* Starred Completed Milestones */}
+        {/* Starred Milestones */}
         <div className="glass-card">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
             <h3 style={{ fontSize: '1.15rem', fontWeight: '800', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <Star size={18} fill="var(--accent-amber)" color="var(--accent-amber)" /> Starred Completed Milestones
+              <Star size={18} fill="var(--accent-amber)" color="var(--accent-amber)" /> Starred Highlights & Key Milestones
             </h3>
             <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{starred_items.length} milestones</span>
           </div>
 
           {starred_items.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>
-              No starred completed items yet. Star (★) your important items and complete them to appear in highlights!
+              No starred items yet. Star (★) your important items to appear in highlights!
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
-              {starred_items.map((item) => (
-                <div
-                  key={item.id}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    padding: '0.85rem 1rem',
-                    background: 'var(--bg-card-hover)',
-                    border: '1px solid var(--border-color)',
-                    borderLeft: `4px solid ${item.workspace_color || 'var(--accent-amber)'}`,
-                    borderRadius: 'var(--radius-sm)',
-                    cursor: 'pointer'
-                  }}
-                  onClick={() => onSelectTask(item.id)}
-                >
-                  <div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.2rem' }}>
-                      <span style={{ fontWeight: '800', color: item.workspace_color, fontSize: '0.85rem' }}>
-                        {item.ticket_key}
-                      </span>
-                      <span style={{ fontWeight: '700', color: 'var(--text-main)', fontSize: '0.95rem' }}>
-                        {item.title}
-                      </span>
-                      <span className="badge badge-status" style={{ fontSize: '0.7rem' }}>
-                        {item.complexity || 'Task'}
-                      </span>
-                    </div>
-                    <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                      Completed on: {item.completed_at ? item.completed_at.substring(0, 10) : 'Recent'} • {item.project_name}
-                    </div>
-                  </div>
+              {starred_items.map((item) => {
+                const isDone = item.status === 'Completed';
+                const isInProgress = item.status === 'In Progress';
 
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <span className="badge badge-success">
-                      <CheckCircle2 size={12} /> Completed
-                    </span>
-                    <ArrowUpRight size={16} color="var(--text-dim)" />
+                return (
+                  <div
+                    key={item.id}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '0.85rem 1rem',
+                      background: 'var(--bg-card-hover)',
+                      border: '1px solid var(--border-color)',
+                      borderLeft: `4px solid ${item.workspace_color || 'var(--accent-amber)'}`,
+                      borderRadius: 'var(--radius-sm)',
+                      cursor: 'pointer'
+                    }}
+                    onClick={() => onSelectTask(item.id)}
+                  >
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.2rem' }}>
+                        <span style={{ fontWeight: '800', color: item.workspace_color || 'var(--accent-blue)', fontSize: '0.85rem' }}>
+                          {item.ticket_key}
+                        </span>
+                        <span style={{ fontWeight: '700', color: 'var(--text-main)', fontSize: '0.95rem' }}>
+                          {item.title}
+                        </span>
+                        <span className="badge badge-status" style={{ fontSize: '0.7rem' }}>
+                          {item.orbita_type || 'Task'}
+                        </span>
+                      </div>
+                      <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                        {isDone
+                          ? `Completed on: ${item.completed_at ? item.completed_at.substring(0, 10) : 'Recent'}`
+                          : `Status: ${item.status || 'Active'} • Due: ${item.due_date || item.scheduled_date || 'No Date'}`}
+                        {item.workspace ? ` • ${item.workspace}` : ''}
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <span
+                        className={`badge ${isDone ? 'badge-success' : isInProgress ? 'badge-priority-medium' : 'badge-priority-high'}`}
+                        style={
+                          isDone
+                            ? {}
+                            : isInProgress
+                            ? { background: 'rgba(245, 158, 11, 0.15)', color: 'var(--accent-amber)', border: '1px solid rgba(245, 158, 11, 0.3)' }
+                            : { background: 'rgba(59, 130, 246, 0.15)', color: 'var(--accent-blue)', border: '1px solid rgba(59, 130, 246, 0.3)' }
+                        }
+                      >
+                        {item.status || 'Active'}
+                      </span>
+                      <ArrowUpRight size={16} color="var(--text-dim)" />
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>

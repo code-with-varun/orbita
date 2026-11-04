@@ -265,12 +265,18 @@ export default function TodoView({
                           </span>
                         )}
 
-                        {/* If Project: Show Status as Badge */}
-                        {isProject && (
-                          <span className={`badge ${isDone ? 'badge-success' : 'badge-priority-medium'}`} style={{ fontSize: '0.65rem' }}>
-                            {task.status}
-                          </span>
-                        )}
+                        {/* Live Actual Status Badge */}
+                        <span
+                          className={`badge ${isDone ? 'badge-success' : task.status === 'In Progress' ? 'badge-priority-medium' : 'badge-priority-high'}`}
+                          style={{
+                            fontSize: '0.65rem',
+                            background: isDone ? undefined : task.status === 'In Progress' ? 'rgba(245, 158, 11, 0.15)' : 'rgba(59, 130, 246, 0.12)',
+                            color: isDone ? undefined : task.status === 'In Progress' ? 'var(--accent-amber)' : 'var(--accent-blue)',
+                            border: `1px solid ${isDone ? 'transparent' : task.status === 'In Progress' ? 'rgba(245, 158, 11, 0.3)' : 'rgba(59, 130, 246, 0.25)'}`
+                          }}
+                        >
+                          {task.status || 'Active'}
+                        </span>
                       </div>
 
                       <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', fontSize: '0.75rem', color: 'var(--text-muted)', flexWrap: 'wrap' }}>

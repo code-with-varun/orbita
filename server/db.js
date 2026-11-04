@@ -152,10 +152,150 @@ const AuditLogSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now }
 });
 
+// 7. Past Billing Cycle Schema (Nested inside Subscriptions)
+const BillingCycleSchema = new mongoose.Schema({
+  cycle_date: { type: String, required: true },
+  amount_paid: { type: Number, default: 0 },
+  currency: { type: String, default: 'USD' },
+  invoice_number: { type: String, default: '' },
+  period_start: { type: String, default: '' },
+  period_end: { type: String, default: '' },
+  payment_method: { type: String, default: 'Credit Card' },
+  status: { type: String, default: 'Paid', enum: ['Paid', 'Pending', 'Refunded', 'Failed'] },
+  notes: { type: String, default: '' },
+  createdAt: { type: Date, default: Date.now }
+});
+
+// 8. Subscription Schema
+const SubscriptionSchema = new mongoose.Schema({
+  user_id: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  user_email: { type: String },
+  workspace: { type: String, default: 'Personal', enum: ['Personal', 'Work'] },
+  site: { type: String, required: true },
+  app_name: { type: String, required: true },
+  category: { type: String, default: 'SaaS / Tools' },
+  cost: { type: Number, required: true, default: 0 },
+  currency: { type: String, default: 'USD' },
+  billing_cycle: { type: String, default: 'Monthly', enum: ['Monthly', 'Annually', 'Quarterly', 'Weekly', 'One-Time'] },
+  start_date: { type: String },
+  expiry_date: { type: String, required: true },
+  renewal_date: { type: String, required: true },
+  auto_renew: { type: Boolean, default: true },
+  status: { type: String, default: 'Active', enum: ['Active', 'Expiring Soon', 'Expired', 'Cancelled'] },
+  payment_method: { type: String, default: 'Credit Card' },
+  notes: { type: String, default: '' },
+  past_billing_cycles: [BillingCycleSchema],
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now }
+});
+
+// 9. Warranty Schema
+const WarrantySchema = new mongoose.Schema({
+  user_id: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  user_email: { type: String },
+  workspace: { type: String, default: 'Personal', enum: ['Personal', 'Work'] },
+  product_name: { type: String, required: true },
+  category: { type: String, default: 'Electronics' },
+  cost_paid: { type: Number, required: true, default: 0 },
+  number_of_warranties: { type: Number, default: 1 },
+  expiry_date: { type: String, required: true },
+  purchase_date: { type: String },
+  condition: {
+    type: String,
+    required: true,
+    enum: [
+      'Refurbished condition',
+      'Active condition',
+      'Beyond repair condition',
+      'Bad condition'
+    ],
+    default: 'Active condition'
+  },
+  warranty_provider: { type: String, default: '' },
+  serial_number: { type: String, default: '' },
+  invoice_number: { type: String, default: '' },
+  status: { type: String, default: 'Under Warranty', enum: ['Under Warranty', 'Expiring Soon', 'Expired', 'Claimed'] },
+  notes: { type: String, default: '' },
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now }
+});
+
+// 10. Master Credential Schema
+const CredentialSchema = new mongoose.Schema({
+  user_id: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  user_email: { type: String },
+  workspace: { type: String, default: 'Personal', enum: ['Personal', 'Work'] },
+  site_or_app: { type: String, required: true },
+  category: { type: String, default: 'General' },
+  url: { type: String, default: '' },
+  registered_email: { type: String, default: '' },
+  mobile_number: { type: String, default: '' },
+  user_id_name: { type: String, default: '' },
+  // Stored strictly as AES-256 encrypted cyber-code
+  encrypted_password: { type: String, required: true },
+  password_iv: { type: String, required: true },
+  password_tag: { type: String, required: true },
+  cyber_code: { type: String, default: '' },
+  // Multi-Factor Authentication column & tools
+  mfa_tool: {
+    type: String,
+    default: 'None',
+    enum: [
+      'Google Authenticator',
+      'Salesforce Authenticator',
+      'Microsoft Authenticator',
+      'Mobile OTP / SMS',
+      'Email OTP',
+      'Authy',
+      'Hardware Key (YubiKey)',
+      'Duo Security',
+      'None',
+      'Other'
+    ]
+  },
+  mfa_details: { type: String, default: '' },
+  notes: { type: String, default: '' },
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now }
+});
+
+// 11. Contact Manager Schema
+const ContactSchema = new mongoose.Schema({
+  user_id: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  user_email: { type: String },
+  workspace: { type: String, default: 'Personal', enum: ['Personal', 'Work'] },
+  mobile_name: { type: String, required: true },
+  mobile_number: { type: String, required: true },
+  secondary_number: { type: String, default: '' },
+  mail_id: { type: String, default: '' },
+  secondary_email: { type: String, default: '' },
+  social_ids: {
+    linkedin: { type: String, default: '' },
+    twitter: { type: String, default: '' },
+    github: { type: String, default: '' },
+    instagram: { type: String, default: '' },
+    whatsapp: { type: String, default: '' },
+    other: { type: String, default: '' }
+  },
+  company: { type: String, default: '' },
+  job_title: { type: String, default: '' },
+  context_notes: { type: String, default: '' },
+  google_synced: { type: Boolean, default: false },
+  google_contact_id: { type: String, default: '' },
+  last_synced_with_google: { type: Date },
+  tags: { type: [String], default: [] },
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now }
+});
+
 export const User = mongoose.model('User', UserSchema);
 export const Task = mongoose.model('Task', TaskSchema);
 export const TimeSession = mongoose.model('TimeSession', TimeSessionSchema);
 export const AuditLog = mongoose.model('AuditLog', AuditLogSchema);
+export const Subscription = mongoose.model('Subscription', SubscriptionSchema);
+export const Warranty = mongoose.model('Warranty', WarrantySchema);
+export const Credential = mongoose.model('Credential', CredentialSchema);
+export const Contact = mongoose.model('Contact', ContactSchema);
 
 export async function ensureSuperadmin() {
   try {
@@ -177,7 +317,11 @@ export async function cleanResetDatabase(initiatedBy = 'Super Admin') {
     User.deleteMany({ role: { $ne: 'Superadmin' } }),
     Task.deleteMany({}),
     TimeSession.deleteMany({}),
-    AuditLog.deleteMany({})
+    AuditLog.deleteMany({}),
+    Subscription.deleteMany({}),
+    Warranty.deleteMany({}),
+    Credential.deleteMany({}),
+    Contact.deleteMany({})
   ]);
 
   await ensureSuperadmin();

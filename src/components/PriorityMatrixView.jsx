@@ -181,6 +181,12 @@ export default function PriorityMatrixView({
                           <span className="badge badge-status" style={{ fontSize: '0.63rem', padding: '0.1rem 0.35rem' }}>
                             {task.workspace}
                           </span>
+                          <span
+                            className={`badge ${task.status === 'Completed' ? 'badge-success' : task.status === 'In Progress' ? 'badge-priority-medium' : 'badge-status'}`}
+                            style={{ fontSize: '0.63rem', padding: '0.1rem 0.35rem' }}
+                          >
+                            {task.status || 'Active'}
+                          </span>
                         </div>
 
                         <button

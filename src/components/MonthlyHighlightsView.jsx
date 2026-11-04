@@ -5,6 +5,7 @@ import { MatrixSkeleton, CardSkeleton } from './SkeletonLoader';
 export default function MonthlyHighlightsView({ currentUser, onSelectTask, refreshTrigger }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [statusFilter, setStatusFilter] = useState('All'); // 'All' | 'Active' | 'Completed'
 
   useEffect(() => {
     let url = '/api/highlights/month?';
@@ -115,8 +116,10 @@ export default function MonthlyHighlightsView({ currentUser, onSelectTask, refre
             <Star size={24} fill="var(--accent-amber)" />
           </div>
           <div>
-            <div className="metric-val">{scorecard.starred_count}</div>
-            <div className="metric-lbl">Starred Milestones</div>
+            <div className="metric-val">{starred_items.length}</div>
+            <div className="metric-lbl">
+              Starred Milestones ({starred_items.filter((t) => t.status === 'Completed').length} done • {starred_items.filter((t) => t.status !== 'Completed').length} active)
+            </div>
           </div>
         </div>
       </div>
@@ -125,49 +128,104 @@ export default function MonthlyHighlightsView({ currentUser, onSelectTask, refre
       <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '1.5rem' }}>
         {/* Starred Milestones Section */}
         <div className="glass-card">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
-            <h3 style={{ fontSize: '1.15rem', fontWeight: '800', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <Star size={20} color="var(--accent-amber)" fill="var(--accent-amber)" /> Starred Completed Milestones
-            </h3>
-            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Top accomplishments</span>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+            <div>
+              <h3 style={{ fontSize: '1.15rem', fontWeight: '800', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '0.5rem', margin: 0 }}>
+                <Star size={20} color="var(--accent-amber)" fill="var(--accent-amber)" /> Starred Highlights & Key Milestones
+              </h3>
+              <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                Showing impactful focus items with their live, actual progress status
+              </span>
+            </div>
+
+            {/* Quick Status Filter Tabs */}
+            <div style={{ display: 'flex', gap: '0.35rem' }}>
+              {[
+                { id: 'All', label: `All (${starred_items.length})` },
+                { id: 'Active', label: `Active (${starred_items.filter((t) => t.status !== 'Completed').length})` },
+                { id: 'Completed', label: `Completed (${starred_items.filter((t) => t.status === 'Completed').length})` }
+              ].map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  className={`btn ${statusFilter === tab.id ? 'btn-primary' : 'btn-secondary'}`}
+                  style={{
+                    padding: '0.25rem 0.6rem',
+                    fontSize: '0.75rem',
+                    background: statusFilter === tab.id ? 'var(--accent-amber)' : undefined,
+                    borderColor: statusFilter === tab.id ? 'var(--accent-amber)' : undefined,
+                    color: statusFilter === tab.id ? '#000' : undefined
+                  }}
+                  onClick={() => setStatusFilter(tab.id)}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
           </div>
 
           {starred_items.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '3rem 1rem', color: 'var(--text-muted)' }}>
-              No starred milestones completed yet. Star (★) your most impactful items and complete them to showcase here!
+              No starred milestones found. Star (★) your most impactful items anywhere in the app to showcase them here!
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
-              {starred_items.map((task) => (
-                <div
-                  key={task.id}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    padding: '1rem',
-                    background: 'var(--bg-card-hover)',
-                    border: '1px solid var(--accent-amber)',
-                    borderRadius: 'var(--radius-sm)',
-                    cursor: 'pointer'
-                  }}
-                  onClick={() => onSelectTask(task.id)}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
-                    <Star size={20} color="var(--accent-amber)" fill="var(--accent-amber)" />
-                    <div>
-                      <div style={{ fontWeight: '700', fontSize: '0.95rem', color: 'var(--text-main)' }}>
-                        {task.title}
-                      </div>
-                      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
-                        {task.ticket_key} • {task.orbita_type} • {task.workspace} • Completed: {task.completed_at ? task.completed_at.substring(0, 10) : 'Done'}
-                      </div>
-                    </div>
-                  </div>
+              {starred_items
+                .filter((task) => {
+                  if (statusFilter === 'Active') return task.status !== 'Completed';
+                  if (statusFilter === 'Completed') return task.status === 'Completed';
+                  return true;
+                })
+                .map((task) => {
+                  const isDone = task.status === 'Completed';
+                  const isInProgress = task.status === 'In Progress';
 
-                  <span className="badge badge-success">Completed</span>
-                </div>
-              ))}
+                  return (
+                    <div
+                      key={task.id}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '1rem',
+                        background: 'var(--bg-card-hover)',
+                        border: '1px solid var(--accent-amber)',
+                        borderRadius: 'var(--radius-sm)',
+                        cursor: 'pointer'
+                      }}
+                      onClick={() => onSelectTask(task.id)}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
+                        <Star size={20} color="var(--accent-amber)" fill="var(--accent-amber)" />
+                        <div>
+                          <div style={{ fontWeight: '700', fontSize: '0.95rem', color: 'var(--text-main)' }}>
+                            {task.title}
+                          </div>
+                          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
+                            {task.ticket_key} • {task.orbita_type} • {task.workspace} •{' '}
+                            {isDone
+                              ? `Completed: ${task.completed_at ? task.completed_at.substring(0, 10) : 'Done'}`
+                              : `Due: ${task.due_date || task.scheduled_date || 'No Date'}`}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Actual Live Status Badge */}
+                      <span
+                        className={`badge ${isDone ? 'badge-success' : isInProgress ? 'badge-priority-medium' : 'badge-priority-high'}`}
+                        style={
+                          isDone
+                            ? {}
+                            : isInProgress
+                            ? { background: 'rgba(245, 158, 11, 0.15)', color: 'var(--accent-amber)', border: '1px solid rgba(245, 158, 11, 0.3)' }
+                            : { background: 'rgba(59, 130, 246, 0.15)', color: 'var(--accent-blue)', border: '1px solid rgba(59, 130, 246, 0.3)' }
+                        }
+                      >
+                        {task.status || 'Active'}
+                      </span>
+                    </div>
+                  );
+                })}
             </div>
           )}
         </div>

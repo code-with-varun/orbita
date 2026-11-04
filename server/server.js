@@ -10,8 +10,17 @@ import {
   Task,
   TimeSession,
   AuditLog,
+  Subscription,
+  Warranty,
+  Credential,
+  Contact,
   cleanResetDatabase
 } from './db.js';
+import {
+  encryptPassword,
+  decryptPassword,
+  hashCyberFingerprint
+} from './cryptoUtils.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -51,6 +60,11 @@ app.get('/api/admin/overview', async (req, res) => {
     const totalAuditLogs = await AuditLog.countDocuments();
     const activeTimers = await Task.countDocuments({ is_timer_running: true });
 
+    const totalSubscriptions = await Subscription.countDocuments();
+    const totalWarranties = await Warranty.countDocuments();
+    const totalCredentials = await Credential.countDocuments();
+    const totalContacts = await Contact.countDocuments();
+
     res.json({
       system_health: 'Optimal',
       database_status: 'Connected (MongoDB Atlas)',
@@ -72,6 +86,12 @@ app.get('/api/admin/overview', async (req, res) => {
         total_sessions: totalSessions,
         total_focus_hours: totalFocusHours,
         active_running_timers: activeTimers
+      },
+      assets_and_vault: {
+        subscriptions: totalSubscriptions,
+        warranties: totalWarranties,
+        credentials: totalCredentials,
+        contacts: totalContacts
       },
       governance: {
         total_audit_logs: totalAuditLogs
@@ -389,6 +409,7 @@ async function generateRoutineOccurrences(userFilter = {}) {
         } else if (recType === 'weekly') {
           const dayShort = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'][d.getDay()];
           const dayFull = dayNames[d.getDay()].toLowerCase();
+          const dayIndexStr = String(d.getDay()); // 0 = Sun, 1 = Mon, ..., 6 = Sat
 
           let dayMatches = false;
           if (!recDay) {
@@ -400,7 +421,15 @@ async function generateRoutineOccurrences(userFilter = {}) {
             dayMatches = d.getDay() === 0 || d.getDay() === 6;
           } else {
             const selectedDays = recDay.split(',').map((s) => s.trim().toLowerCase());
-            dayMatches = selectedDays.some((s) => s === dayShort || s === dayFull || dayFull.startsWith(s) || dayShort.startsWith(s));
+            dayMatches = selectedDays.some((s) =>
+              s === dayIndexStr ||
+              s === dayShort ||
+              s === dayFull ||
+              dayFull.startsWith(s) ||
+              dayShort.startsWith(s) ||
+              s.includes(`(${dayIndexStr})`) ||
+              s.startsWith(dayIndexStr)
+            );
           }
 
           if (dayMatches) {
@@ -413,20 +442,29 @@ async function generateRoutineOccurrences(userFilter = {}) {
               }
             }
           }
-        } else if (recType === 'monthly') {
+        } else if (recType === 'monthly' || recType === 'monthday' || recType === 'month + day') {
           let dayMatches = false;
           const lastDayOfCurMonth = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
 
           if (recDay === 'last' || recDay === 'last_day' || recDay.includes('last day')) {
             dayMatches = d.getDate() === lastDayOfCurMonth;
           } else if (recDay.startsWith('ordinal_')) {
-            // e.g. ordinal_1_mon (1st Monday of month) or ordinal_last_fri (last Friday of month)
+            // e.g. ordinal_1_sat (1st Saturday) or ordinal_last_sun (last Sunday)
             const parts = recDay.split('_');
             const pos = parts[1]; // 1, 2, 3, 4, or last
-            const targetWeekday = parts[2]; // mon, tue, wed, thu, fri, sat, sun
+            const targetWeekday = parts[2]?.toLowerCase();
             const dayShort = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'][d.getDay()];
+            const dayFull = dayNames[d.getDay()].toLowerCase();
+            const dayIndexStr = String(d.getDay());
 
-            if (targetWeekday === dayShort) {
+            const weekdayMatches =
+              targetWeekday === dayShort ||
+              targetWeekday === dayFull ||
+              targetWeekday === dayIndexStr ||
+              dayFull.startsWith(targetWeekday || '') ||
+              dayShort.startsWith(targetWeekday || '');
+
+            if (weekdayMatches) {
               if (pos === 'last') {
                 dayMatches = d.getDate() + 7 > lastDayOfCurMonth;
               } else {
@@ -437,6 +475,7 @@ async function generateRoutineOccurrences(userFilter = {}) {
           } else {
             const targetDayNum = parseInt(recDay, 10);
             if (!isNaN(targetDayNum)) {
+              // 31st (or 29th/30th) automatically clamps to last day of shorter months (e.g. Feb 28/29, Apr 30)
               dayMatches = d.getDate() === Math.min(targetDayNum, lastDayOfCurMonth);
             } else {
               dayMatches = d.getDate() === Math.min(createdDate.getDate(), lastDayOfCurMonth);
@@ -460,13 +499,19 @@ async function generateRoutineOccurrences(userFilter = {}) {
           if (recDay.includes('-') || recDay.includes('/')) {
             const separator = recDay.includes('-') ? '-' : '/';
             const parts = recDay.split(separator);
-            const targetMonth = parseInt(parts[0], 10) - 1; // 0-indexed
+            const targetMonth = parseInt(parts[0], 10) - 1; // 0-indexed (0 = Jan)
             const targetDay = parseInt(parts[1], 10);
             monthMatches = d.getMonth() === targetMonth;
-            dayMatches = d.getDate() === targetDay;
+
+            // Clamping to last day of target month (e.g. Feb 29 on non-leap year or Apr 31)
+            const daysInTargetMonth = new Date(d.getFullYear(), targetMonth + 1, 0).getDate();
+            const clampedDay = Math.min(targetDay, daysInTargetMonth);
+            dayMatches = d.getDate() === clampedDay;
           } else {
             monthMatches = d.getMonth() === createdDate.getMonth();
-            dayMatches = d.getDate() === createdDate.getDate();
+            const daysInTargetMonth = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+            const clampedDay = Math.min(createdDate.getDate(), daysInTargetMonth);
+            dayMatches = d.getDate() === clampedDay;
           }
 
           if (monthMatches && dayMatches) {
@@ -776,6 +821,10 @@ app.post('/api/tasks', async (req, res) => {
       details: `Created ${ticket_key}: ${title} (${workspace} • ${orbita_type})`
     });
 
+    if (orbita_type === 'Routine') {
+      await generateRoutineOccurrences({ _id: task._id });
+    }
+
     res.status(201).json(formatTaskResponse(task));
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -874,6 +923,10 @@ app.put('/api/tasks/:id', async (req, res) => {
         action: task.status === 'Completed' ? `${task.orbita_type} Completed` : 'Status Changed',
         details: `Status updated from ${prevStatus} to ${task.status}`
       });
+    }
+
+    if (task.orbita_type === 'Routine') {
+      await generateRoutineOccurrences({ _id: task._id });
     }
 
     const resObj = task.toObject();
@@ -1671,6 +1724,8 @@ app.get('/api/highlights/month', async (req, res) => {
       (t) => t.status === 'Completed' && t.completed_at && new Date(t.completed_at) >= startOfMonth
     );
     const starredItems = allItems.filter((t) => t.is_starred);
+    const starredCompleted = starredItems.filter((t) => t.status === 'Completed');
+    const starredActive = starredItems.filter((t) => t.status !== 'Completed');
 
     const sessionFilter = buildUserFilter(req, 'session');
     const sessions = await TimeSession.find(sessionFilter);
@@ -1712,7 +1767,10 @@ app.get('/api/highlights/month', async (req, res) => {
         projects_completed: projectsCompleted,
         routines_kept: routinesKept,
         focus_hours: totalFocusHours,
-        goals_tracked: goalsTracked
+        goals_tracked: goalsTracked,
+        starred_count: starredItems.length,
+        starred_completed_count: starredCompleted.length,
+        starred_active_count: starredActive.length
       },
       starred_items: starredItems.map((t) => ({ ...t.toObject(), id: t._id.toString() })),
       badges
@@ -1814,58 +1872,6 @@ app.get('/api/matrix', async (req, res) => {
   }
 });
 
-// -------------------------------------------------------------
-// MONTHLY HIGHLIGHTS & SCORECARD
-// -------------------------------------------------------------
-
-app.get('/api/highlights/month', async (req, res) => {
-  try {
-    const currentMonth = new Date().toLocaleString('default', { month: 'long', year: 'numeric' });
-    const userFilter = buildUserFilter(req, 'task');
-
-    const total = await Task.countDocuments(userFilter);
-    const completed = await Task.countDocuments({ ...userFilter, status: 'Completed' });
-    const tasksDone = await Task.countDocuments({ ...userFilter, orbita_type: 'Task', status: 'Completed' });
-    const routinesDone = await Task.countDocuments({ ...userFilter, orbita_type: 'Routine', status: 'Completed' });
-    const goalsDone = await Task.countDocuments({ ...userFilter, orbita_type: 'Goal', status: 'Completed' });
-    const projectsDone = await Task.countDocuments({ ...userFilter, orbita_type: 'Project', status: 'Completed' });
-
-    const totalHoursAgg = await Task.aggregate([
-      { $match: userFilter },
-      { $group: { _id: null, total: { $sum: '$actual_hours' } } }
-    ]);
-    const focusHours = Math.round((totalHoursAgg[0]?.total || 0) * 10) / 10;
-
-    const starredCompleted = await Task.find({ ...userFilter, is_starred: true, status: 'Completed' }).sort({ completed_at: -1 });
-
-    const badges = [
-      { id: 'task_finisher', title: 'Task Finisher', desc: 'Completed single-action tasks', earned: tasksDone > 0, color: 'var(--accent-green)' },
-      { id: 'routine_master', title: 'Routine Master', desc: 'Completed recurring routine tasks', earned: routinesDone > 0, color: 'var(--accent-purple)' },
-      { id: 'goal_achiever', title: 'Goal Achiever', desc: 'Completed ongoing focus goals', earned: goalsDone > 0, color: 'var(--accent-amber)' },
-      { id: 'project_champion', title: 'Project Champion', desc: 'Delivered multi-stage structured projects', earned: projectsDone > 0, color: 'var(--accent-blue)' },
-      { id: 'deep_work', title: 'Deep Work Hero', desc: 'Logged deep focus timer sessions', earned: focusHours >= 2.0, color: 'var(--accent-pink)' }
-    ];
-
-    res.json({
-      month: currentMonth,
-      scorecard: {
-        total_items: total,
-        total_completed: completed,
-        tasks_completed: tasksDone,
-        routines_completed: routinesDone,
-        goals_completed: goalsDone,
-        projects_completed: projectsDone,
-        focus_hours: focusHours,
-        starred_count: starredCompleted.length,
-        achievement_score: total > 0 ? `${Math.min(10, Math.round(((completed / total) * 10) * 10) / 10)}/10` : '0/10'
-      },
-      starred_items: starredCompleted.map((t) => ({ ...t.toObject(), id: t._id.toString() })),
-      badges
-    });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
 
 // -------------------------------------------------------------
 // DASHBOARD STATS
@@ -1937,6 +1943,1227 @@ app.get('/api/audit-logs', async (req, res) => {
       task_id: l.task_id?.toString()
     }));
     res.json(formatted);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Helper for asset filters (Subscriptions, Warranties, Credentials, Contacts)
+function buildAssetUserFilter(req) {
+  const { user_id, user_email, user_role, workspace } = req.query;
+  const filter = {};
+
+  if (workspace && workspace !== 'All') {
+    filter.workspace = workspace;
+  }
+
+  if (user_role === 'Superadmin') {
+    return filter;
+  }
+
+  const conditions = [];
+  if (user_id && user_id !== 'undefined' && user_id !== 'null' && user_id !== '') {
+    conditions.push({ user_id });
+    if (mongoose.Types.ObjectId.isValid(user_id)) {
+      conditions.push({ user_id: new mongoose.Types.ObjectId(user_id) });
+    }
+  }
+  if (user_email && user_email !== 'undefined' && user_email !== 'null' && user_email !== '') {
+    const cleanEmail = user_email.toLowerCase().trim();
+    conditions.push({ user_email: new RegExp(`^${cleanEmail}$`, 'i') });
+  }
+
+  if (conditions.length > 0) {
+    filter.$or = conditions;
+  }
+
+  return filter;
+}
+
+// -------------------------------------------------------------
+// 1. SUBSCRIPTION MANAGER ENDPOINTS
+// -------------------------------------------------------------
+
+app.get('/api/subscriptions', async (req, res) => {
+  try {
+    const filter = buildAssetUserFilter(req);
+    const { search, status, category } = req.query;
+
+    if (status && status !== 'All') {
+      filter.status = status;
+    }
+    if (category && category !== 'All') {
+      filter.category = category;
+    }
+    if (search && search.trim()) {
+      const sRegex = new RegExp(search.trim(), 'i');
+      filter.$and = filter.$and || [];
+      filter.$and.push({
+        $or: [
+          { site: sRegex },
+          { app_name: sRegex },
+          { category: sRegex },
+          { notes: sRegex }
+        ]
+      });
+    }
+
+    const subscriptions = await Subscription.find(filter).sort({ renewal_date: 1, expiry_date: 1 });
+    const formatted = subscriptions.map((sub) => ({
+      ...sub.toObject(),
+      id: sub._id.toString(),
+      past_cycles_count: sub.past_billing_cycles?.length || 0
+    }));
+    res.json(formatted);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/subscriptions/:id', async (req, res) => {
+  try {
+    const sub = await Subscription.findById(req.params.id);
+    if (!sub) return res.status(404).json({ error: 'Subscription not found' });
+    res.json({
+      ...sub.toObject(),
+      id: sub._id.toString()
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/subscriptions', async (req, res) => {
+  try {
+    const {
+      site,
+      app_name,
+      category,
+      cost,
+      currency,
+      billing_cycle,
+      start_date,
+      expiry_date,
+      renewal_date,
+      auto_renew,
+      payment_method,
+      notes,
+      workspace,
+      user_id,
+      user_email,
+      user_name,
+      initial_cycle
+    } = req.body;
+
+    if (!site || !app_name || !expiry_date || !renewal_date) {
+      return res.status(400).json({ error: 'Site, app name, expiry date and renewal date are required' });
+    }
+
+    const past_billing_cycles = [];
+    if (initial_cycle && initial_cycle.cycle_date) {
+      past_billing_cycles.push({
+        cycle_date: initial_cycle.cycle_date,
+        amount_paid: Number(initial_cycle.amount_paid || cost || 0),
+        currency: currency || 'USD',
+        invoice_number: initial_cycle.invoice_number || '',
+        period_start: initial_cycle.period_start || start_date || '',
+        period_end: initial_cycle.period_end || expiry_date || '',
+        payment_method: payment_method || 'Credit Card',
+        status: initial_cycle.status || 'Paid',
+        notes: initial_cycle.notes || 'Initial subscription billing record'
+      });
+    }
+
+    const subscription = new Subscription({
+      site,
+      app_name,
+      category: category || 'SaaS / Tools',
+      cost: Number(cost || 0),
+      currency: currency || 'USD',
+      billing_cycle: billing_cycle || 'Monthly',
+      start_date: start_date || '',
+      expiry_date,
+      renewal_date,
+      auto_renew: auto_renew !== undefined ? Boolean(auto_renew) : true,
+      payment_method: payment_method || 'Credit Card',
+      notes: notes || '',
+      workspace: workspace || 'Personal',
+      user_id: user_id && mongoose.Types.ObjectId.isValid(user_id) ? user_id : undefined,
+      user_email: user_email || '',
+      past_billing_cycles
+    });
+
+    await subscription.save();
+
+    await AuditLog.create({
+      user_id: user_id && mongoose.Types.ObjectId.isValid(user_id) ? user_id : undefined,
+      user_email: user_email || '',
+      user_name: user_name || 'User',
+      action: 'Create Subscription',
+      details: `Added subscription for ${app_name} on ${site} (${currency || 'USD'} ${cost} / ${billing_cycle || 'Monthly'})`
+    });
+
+    res.status(201).json({
+      ...subscription.toObject(),
+      id: subscription._id.toString()
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/api/subscriptions/:id', async (req, res) => {
+  try {
+    const sub = await Subscription.findById(req.params.id);
+    if (!sub) return res.status(404).json({ error: 'Subscription not found' });
+
+    const fields = [
+      'site', 'app_name', 'category', 'cost', 'currency', 'billing_cycle',
+      'start_date', 'expiry_date', 'renewal_date', 'auto_renew', 'status',
+      'payment_method', 'notes', 'workspace'
+    ];
+    fields.forEach((f) => {
+      if (req.body[f] !== undefined) sub[f] = req.body[f];
+    });
+    sub.updatedAt = new Date();
+
+    await sub.save();
+
+    await AuditLog.create({
+      user_name: req.body.user_name || 'User',
+      action: 'Update Subscription',
+      details: `Updated subscription: ${sub.app_name} (${sub.site})`
+    });
+
+    res.json({ ...sub.toObject(), id: sub._id.toString() });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/subscriptions/:id', async (req, res) => {
+  try {
+    const sub = await Subscription.findByIdAndDelete(req.params.id);
+    if (!sub) return res.status(404).json({ error: 'Subscription not found' });
+
+    await AuditLog.create({
+      user_name: req.query.user_name || 'User',
+      action: 'Delete Subscription',
+      details: `Removed subscription for ${sub.app_name} (${sub.site})`
+    });
+
+    res.json({ message: 'Subscription deleted successfully' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/subscriptions/:id/billing-cycles', async (req, res) => {
+  try {
+    const sub = await Subscription.findById(req.params.id);
+    if (!sub) return res.status(404).json({ error: 'Subscription not found' });
+
+    const {
+      cycle_date,
+      amount_paid,
+      currency,
+      invoice_number,
+      period_start,
+      period_end,
+      payment_method,
+      status,
+      notes,
+      next_renewal_date,
+      next_expiry_date,
+      user_name
+    } = req.body;
+
+    if (!cycle_date) {
+      return res.status(400).json({ error: 'Cycle date is required' });
+    }
+
+    const newCycle = {
+      cycle_date,
+      amount_paid: Number(amount_paid || sub.cost || 0),
+      currency: currency || sub.currency || 'USD',
+      invoice_number: invoice_number || '',
+      period_start: period_start || '',
+      period_end: period_end || '',
+      payment_method: payment_method || sub.payment_method || 'Credit Card',
+      status: status || 'Paid',
+      notes: notes || ''
+    };
+
+    sub.past_billing_cycles.unshift(newCycle);
+
+    if (next_renewal_date) sub.renewal_date = next_renewal_date;
+    if (next_expiry_date) sub.expiry_date = next_expiry_date;
+    sub.updatedAt = new Date();
+
+    await sub.save();
+
+    await AuditLog.create({
+      user_name: user_name || 'User',
+      action: 'Log Billing Cycle',
+      details: `Recorded billing cycle for ${sub.app_name}: ${newCycle.currency} ${newCycle.amount_paid} on ${cycle_date}`
+    });
+
+    res.status(201).json({
+      ...sub.toObject(),
+      id: sub._id.toString()
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/subscriptions/:id/billing-cycles/:cycleId', async (req, res) => {
+  try {
+    const sub = await Subscription.findById(req.params.id);
+    if (!sub) return res.status(404).json({ error: 'Subscription not found' });
+
+    sub.past_billing_cycles = sub.past_billing_cycles.filter(
+      (c) => c._id.toString() !== req.params.cycleId
+    );
+    sub.updatedAt = new Date();
+    await sub.save();
+
+    res.json({ ...sub.toObject(), id: sub._id.toString() });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// -------------------------------------------------------------
+// 2. WARRANTY MANAGER ENDPOINTS
+// -------------------------------------------------------------
+
+app.get('/api/warranties', async (req, res) => {
+  try {
+    const filter = buildAssetUserFilter(req);
+    const { search, condition, status, category } = req.query;
+
+    if (condition && condition !== 'All') {
+      filter.condition = condition;
+    }
+    if (status && status !== 'All') {
+      filter.status = status;
+    }
+    if (category && category !== 'All') {
+      filter.category = category;
+    }
+    if (search && search.trim()) {
+      const sRegex = new RegExp(search.trim(), 'i');
+      filter.$and = filter.$and || [];
+      filter.$and.push({
+        $or: [
+          { product_name: sRegex },
+          { category: sRegex },
+          { serial_number: sRegex },
+          { warranty_provider: sRegex },
+          { invoice_number: sRegex },
+          { notes: sRegex }
+        ]
+      });
+    }
+
+    const warranties = await Warranty.find(filter).sort({ expiry_date: 1 });
+    const formatted = warranties.map((w) => ({
+      ...w.toObject(),
+      id: w._id.toString()
+    }));
+    res.json(formatted);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/warranties/:id', async (req, res) => {
+  try {
+    const warranty = await Warranty.findById(req.params.id);
+    if (!warranty) return res.status(404).json({ error: 'Warranty not found' });
+    res.json({ ...warranty.toObject(), id: warranty._id.toString() });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/warranties', async (req, res) => {
+  try {
+    const {
+      product_name,
+      category,
+      cost_paid,
+      number_of_warranties,
+      expiry_date,
+      purchase_date,
+      condition,
+      warranty_provider,
+      serial_number,
+      invoice_number,
+      status,
+      notes,
+      workspace,
+      user_id,
+      user_email,
+      user_name
+    } = req.body;
+
+    if (!product_name || !expiry_date) {
+      return res.status(400).json({ error: 'Product name and expiry date are required' });
+    }
+
+    const validConditions = [
+      'Refurbished condition',
+      'Active condition',
+      'Beyond repair condition',
+      'Bad condition'
+    ];
+    const conditionValue = validConditions.includes(condition) ? condition : 'Active condition';
+
+    const warranty = new Warranty({
+      product_name,
+      category: category || 'Electronics',
+      cost_paid: Number(cost_paid || 0),
+      number_of_warranties: Number(number_of_warranties || 1),
+      expiry_date,
+      purchase_date: purchase_date || '',
+      condition: conditionValue,
+      warranty_provider: warranty_provider || '',
+      serial_number: serial_number || '',
+      invoice_number: invoice_number || '',
+      status: status || 'Under Warranty',
+      notes: notes || '',
+      workspace: workspace || 'Personal',
+      user_id: user_id && mongoose.Types.ObjectId.isValid(user_id) ? user_id : undefined,
+      user_email: user_email || ''
+    });
+
+    await warranty.save();
+
+    await AuditLog.create({
+      user_id: user_id && mongoose.Types.ObjectId.isValid(user_id) ? user_id : undefined,
+      user_email: user_email || '',
+      user_name: user_name || 'User',
+      action: 'Create Warranty',
+      details: `Registered warranty for ${product_name} (${conditionValue}, paid: $${cost_paid || 0}, expires: ${expiry_date})`
+    });
+
+    res.status(201).json({ ...warranty.toObject(), id: warranty._id.toString() });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/api/warranties/:id', async (req, res) => {
+  try {
+    const warranty = await Warranty.findById(req.params.id);
+    if (!warranty) return res.status(404).json({ error: 'Warranty not found' });
+
+    const fields = [
+      'product_name', 'category', 'cost_paid', 'number_of_warranties',
+      'expiry_date', 'purchase_date', 'condition', 'warranty_provider',
+      'serial_number', 'invoice_number', 'status', 'notes', 'workspace'
+    ];
+    fields.forEach((f) => {
+      if (req.body[f] !== undefined) warranty[f] = req.body[f];
+    });
+    warranty.updatedAt = new Date();
+
+    await warranty.save();
+
+    await AuditLog.create({
+      user_name: req.body.user_name || 'User',
+      action: 'Update Warranty',
+      details: `Updated warranty for ${warranty.product_name} (${warranty.condition})`
+    });
+
+    res.json({ ...warranty.toObject(), id: warranty._id.toString() });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/warranties/:id', async (req, res) => {
+  try {
+    const warranty = await Warranty.findByIdAndDelete(req.params.id);
+    if (!warranty) return res.status(404).json({ error: 'Warranty not found' });
+
+    await AuditLog.create({
+      user_name: req.query.user_name || 'User',
+      action: 'Delete Warranty',
+      details: `Removed warranty record for ${warranty.product_name}`
+    });
+
+    res.json({ message: 'Warranty deleted successfully' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// -------------------------------------------------------------
+// 3. MASTER CREDENTIAL MANAGER & REVEAL ENDPOINTS
+// -------------------------------------------------------------
+
+app.get('/api/credentials', async (req, res) => {
+  try {
+    const filter = buildAssetUserFilter(req);
+    const { search, mfa_tool, category } = req.query;
+
+    if (mfa_tool && mfa_tool !== 'All') {
+      filter.mfa_tool = mfa_tool;
+    }
+    if (category && category !== 'All') {
+      filter.category = category;
+    }
+    if (search && search.trim()) {
+      const sRegex = new RegExp(search.trim(), 'i');
+      filter.$and = filter.$and || [];
+      filter.$and.push({
+        $or: [
+          { site_or_app: sRegex },
+          { registered_email: sRegex },
+          { mobile_number: sRegex },
+          { user_id_name: sRegex },
+          { mfa_tool: sRegex },
+          { category: sRegex },
+          { notes: sRegex }
+        ]
+      });
+    }
+
+    // Exclude plaintext and raw crypto tag/iv from standard list for maximum cyber security
+    const credentials = await Credential.find(filter).sort({ site_or_app: 1 });
+
+    const safeList = credentials.map((c) => ({
+      id: c._id.toString(),
+      site_or_app: c.site_or_app,
+      category: c.category || 'General',
+      url: c.url || '',
+      registered_email: c.registered_email || '',
+      mobile_number: c.mobile_number || '',
+      user_id_name: c.user_id_name || '',
+      password_masked: '••••••••••••',
+      has_password: Boolean(c.encrypted_password),
+      cyber_encrypted: true,
+      cyber_code_hash: hashCyberFingerprint(c.encrypted_password),
+      mfa_tool: c.mfa_tool || 'None',
+      mfa_details: c.mfa_details || '',
+      workspace: c.workspace || 'Personal',
+      notes: c.notes || '',
+      createdAt: c.createdAt,
+      updatedAt: c.updatedAt
+    }));
+
+    res.json(safeList);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/credentials', async (req, res) => {
+  try {
+    const {
+      site_or_app,
+      category,
+      url,
+      registered_email,
+      mobile_number,
+      user_id_name,
+      password,
+      mfa_tool,
+      mfa_details,
+      notes,
+      workspace,
+      user_id,
+      user_email,
+      user_name
+    } = req.body;
+
+    if (!site_or_app) {
+      return res.status(400).json({ error: 'Site or application name is required' });
+    }
+
+    // Encrypt password using AES-256 cyber code
+    const cryptoResult = encryptPassword(password || '');
+
+    const credential = new Credential({
+      site_or_app,
+      category: category || 'General',
+      url: url || '',
+      registered_email: registered_email || '',
+      mobile_number: mobile_number || '',
+      user_id_name: user_id_name || '',
+      encrypted_password: cryptoResult.encrypted,
+      password_iv: cryptoResult.iv,
+      password_tag: cryptoResult.tag,
+      cyber_code: cryptoResult.cyberCode,
+      mfa_tool: mfa_tool || 'None',
+      mfa_details: mfa_details || '',
+      notes: notes || '',
+      workspace: workspace || 'Personal',
+      user_id: user_id && mongoose.Types.ObjectId.isValid(user_id) ? user_id : undefined,
+      user_email: user_email || ''
+    });
+
+    await credential.save();
+
+    await AuditLog.create({
+      user_id: user_id && mongoose.Types.ObjectId.isValid(user_id) ? user_id : undefined,
+      user_email: user_email || '',
+      user_name: user_name || 'User',
+      action: 'Create Credential Vault Entry',
+      details: `Stored cyber-encrypted credentials for ${site_or_app} (${user_id_name || registered_email}) with 2FA: ${mfa_tool || 'None'}`
+    });
+
+    res.status(201).json({
+      id: credential._id.toString(),
+      site_or_app: credential.site_or_app,
+      category: credential.category,
+      registered_email: credential.registered_email,
+      mobile_number: credential.mobile_number,
+      user_id_name: credential.user_id_name,
+      password_masked: '••••••••••••',
+      has_password: true,
+      cyber_encrypted: true,
+      mfa_tool: credential.mfa_tool,
+      mfa_details: credential.mfa_details
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/api/credentials/:id', async (req, res) => {
+  try {
+    const cred = await Credential.findById(req.params.id);
+    if (!cred) return res.status(404).json({ error: 'Credential not found' });
+
+    const fields = [
+      'site_or_app', 'category', 'url', 'registered_email', 'mobile_number',
+      'user_id_name', 'mfa_tool', 'mfa_details', 'notes', 'workspace'
+    ];
+    fields.forEach((f) => {
+      if (req.body[f] !== undefined) cred[f] = req.body[f];
+    });
+
+    // If new password provided, re-encrypt
+    if (req.body.password !== undefined && req.body.password.trim() !== '') {
+      const cryptoResult = encryptPassword(req.body.password);
+      cred.encrypted_password = cryptoResult.encrypted;
+      cred.password_iv = cryptoResult.iv;
+      cred.password_tag = cryptoResult.tag;
+      cred.cyber_code = cryptoResult.cyberCode;
+    }
+
+    cred.updatedAt = new Date();
+    await cred.save();
+
+    await AuditLog.create({
+      user_name: req.body.user_name || 'User',
+      action: 'Update Credential',
+      details: `Updated vault credentials for ${cred.site_or_app} (${cred.user_id_name})`
+    });
+
+    res.json({
+      id: cred._id.toString(),
+      site_or_app: cred.site_or_app,
+      category: cred.category,
+      registered_email: cred.registered_email,
+      mobile_number: cred.mobile_number,
+      user_id_name: cred.user_id_name,
+      password_masked: '••••••••••••',
+      has_password: true,
+      mfa_tool: cred.mfa_tool,
+      mfa_details: cred.mfa_details
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/credentials/:id', async (req, res) => {
+  try {
+    const cred = await Credential.findByIdAndDelete(req.params.id);
+    if (!cred) return res.status(404).json({ error: 'Credential not found' });
+
+    await AuditLog.create({
+      user_name: req.query.user_name || 'User',
+      action: 'Delete Credential',
+      details: `Deleted vault credential for ${cred.site_or_app} (${cred.user_id_name})`
+    });
+
+    res.json({ message: 'Credential deleted successfully' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Password Reveal - strictly decrypts only this line item and logs security audit trail
+app.post('/api/credentials/:id/reveal', async (req, res) => {
+  try {
+    const cred = await Credential.findById(req.params.id);
+    if (!cred) return res.status(404).json({ error: 'Credential not found' });
+
+    const decryptedPassword = decryptPassword(
+      cred.encrypted_password,
+      cred.password_iv,
+      cred.password_tag,
+      cred.cyber_code
+    );
+
+    await AuditLog.create({
+      user_id: cred.user_id,
+      user_email: cred.user_email,
+      user_name: req.body.user_name || 'Authorized User',
+      action: 'Password Reveal Requested',
+      details: `Password revealed for ${cred.site_or_app} (User ID: ${cred.user_id_name || cred.registered_email})`
+    });
+
+    res.json({
+      id: cred._id.toString(),
+      site_or_app: cred.site_or_app,
+      user_id_name: cred.user_id_name,
+      password: decryptedPassword
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// -------------------------------------------------------------
+// 4. CONTACT MANAGER, MERGE & GOOGLE SYNC ENDPOINTS
+// -------------------------------------------------------------
+
+app.get('/api/contacts', async (req, res) => {
+  try {
+    const filter = buildAssetUserFilter(req);
+    const { search, google_synced } = req.query;
+
+    if (google_synced !== undefined && google_synced !== 'All') {
+      filter.google_synced = google_synced === 'true';
+    }
+
+    if (search && search.trim()) {
+      const sRegex = new RegExp(search.trim(), 'i');
+      filter.$and = filter.$and || [];
+      filter.$and.push({
+        $or: [
+          { mobile_name: sRegex },
+          { mobile_number: sRegex },
+          { secondary_number: sRegex },
+          { mail_id: sRegex },
+          { secondary_email: sRegex },
+          { company: sRegex },
+          { job_title: sRegex },
+          { context_notes: sRegex },
+          { tags: sRegex }
+        ]
+      });
+    }
+
+    const contacts = await Contact.find(filter).sort({ mobile_name: 1 });
+    const formatted = contacts.map((c) => ({
+      ...c.toObject(),
+      id: c._id.toString()
+    }));
+    res.json(formatted);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+function makePhoneRegex(phoneStr) {
+  const digits = (phoneStr || '').replace(/\D/g, '').slice(-10);
+  if (digits.length < 7) return null;
+  // Match digits with optional non-digits between them so formatted numbers like "+1 650-555-0188" match
+  return new RegExp(digits.split('').join('\\D*'), 'i');
+}
+
+// Check potential duplicate contacts by phone, email, or name
+app.post('/api/contacts/check-duplicate', async (req, res) => {
+  try {
+    const { mobile_number, mail_id, mobile_name, exclude_id } = req.body;
+    const conditions = [];
+
+    const phoneRegex = makePhoneRegex(mobile_number);
+    if (phoneRegex) {
+      conditions.push({
+        $or: [
+          { mobile_number: phoneRegex },
+          { secondary_number: phoneRegex }
+        ]
+      });
+    }
+
+    if (mail_id && mail_id.trim()) {
+      const cleanEmail = mail_id.trim().toLowerCase();
+      conditions.push({
+        $or: [
+          { mail_id: new RegExp(`^${cleanEmail}$`, 'i') },
+          { secondary_email: new RegExp(`^${cleanEmail}$`, 'i') }
+        ]
+      });
+    }
+
+    if (mobile_name && mobile_name.trim().length >= 3) {
+      conditions.push({
+        mobile_name: new RegExp(`^${mobile_name.trim()}$`, 'i')
+      });
+    }
+
+    if (conditions.length === 0) {
+      return res.json({ isDuplicate: false, duplicates: [] });
+    }
+
+    const query = { $or: conditions };
+    if (exclude_id && mongoose.Types.ObjectId.isValid(exclude_id)) {
+      query._id = { $ne: new mongoose.Types.ObjectId(exclude_id) };
+    }
+
+    const duplicates = await Contact.find(query).limit(5);
+    res.json({
+      isDuplicate: duplicates.length > 0,
+      duplicates: duplicates.map((d) => ({ ...d.toObject(), id: d._id.toString() }))
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Create Contact (with auto-duplicate detection)
+app.post('/api/contacts', async (req, res) => {
+  try {
+    const {
+      mobile_name,
+      mobile_number,
+      secondary_number,
+      mail_id,
+      secondary_email,
+      social_ids,
+      company,
+      job_title,
+      context_notes,
+      tags,
+      workspace,
+      user_id,
+      user_email,
+      user_name,
+      force
+    } = req.body;
+
+    if (!mobile_name || !mobile_number) {
+      return res.status(400).json({ error: 'Contact name and mobile number are required' });
+    }
+
+    // Unless client explicitly asked to bypass duplicate check (force = true)
+    if (!force) {
+      const phoneRegex = makePhoneRegex(mobile_number);
+      const orClauses = [];
+      if (phoneRegex) {
+        orClauses.push({ mobile_number: phoneRegex });
+        orClauses.push({ secondary_number: phoneRegex });
+      }
+      if (mail_id && mail_id.trim()) {
+        orClauses.push({ mail_id: new RegExp(`^${mail_id.trim()}$`, 'i') });
+        orClauses.push({ secondary_email: new RegExp(`^${mail_id.trim()}$`, 'i') });
+      }
+      if (orClauses.length > 0) {
+        const existing = await Contact.find({ $or: orClauses });
+        if (existing.length > 0) {
+          return res.status(409).json({
+            duplicateDetected: true,
+            message: 'Duplicate contact detected with matching phone number or email.',
+            duplicates: existing.map((e) => ({ ...e.toObject(), id: e._id.toString() }))
+          });
+        }
+      }
+    }
+
+    const contact = new Contact({
+      mobile_name,
+      mobile_number,
+      secondary_number: secondary_number || '',
+      mail_id: mail_id || '',
+      secondary_email: secondary_email || '',
+      social_ids: {
+        linkedin: social_ids?.linkedin || '',
+        twitter: social_ids?.twitter || '',
+        github: social_ids?.github || '',
+        instagram: social_ids?.instagram || '',
+        whatsapp: social_ids?.whatsapp || '',
+        other: social_ids?.other || ''
+      },
+      company: company || '',
+      job_title: job_title || '',
+      context_notes: context_notes || '',
+      tags: Array.isArray(tags) ? tags : (tags ? tags.split(',').map((t) => t.trim()) : []),
+      workspace: workspace || 'Personal',
+      user_id: user_id && mongoose.Types.ObjectId.isValid(user_id) ? user_id : undefined,
+      user_email: user_email || ''
+    });
+
+    await contact.save();
+
+    await AuditLog.create({
+      user_id: user_id && mongoose.Types.ObjectId.isValid(user_id) ? user_id : undefined,
+      user_email: user_email || '',
+      user_name: user_name || 'User',
+      action: 'Create Contact',
+      details: `Added contact ${mobile_name} (${mobile_number})`
+    });
+
+    res.status(201).json({ ...contact.toObject(), id: contact._id.toString() });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/api/contacts/:id', async (req, res) => {
+  try {
+    const contact = await Contact.findById(req.params.id);
+    if (!contact) return res.status(404).json({ error: 'Contact not found' });
+
+    const fields = [
+      'mobile_name', 'mobile_number', 'secondary_number', 'mail_id', 'secondary_email',
+      'company', 'job_title', 'context_notes', 'workspace', 'google_synced'
+    ];
+    fields.forEach((f) => {
+      if (req.body[f] !== undefined) contact[f] = req.body[f];
+    });
+
+    if (req.body.social_ids) {
+      contact.social_ids = {
+        ...contact.social_ids?.toObject(),
+        ...req.body.social_ids
+      };
+    }
+
+    if (req.body.tags) {
+      contact.tags = Array.isArray(req.body.tags)
+        ? req.body.tags
+        : req.body.tags.split(',').map((t) => t.trim());
+    }
+
+    contact.updatedAt = new Date();
+    await contact.save();
+
+    await AuditLog.create({
+      user_name: req.body.user_name || 'User',
+      action: 'Update Contact',
+      details: `Updated contact ${contact.mobile_name} (${contact.mobile_number})`
+    });
+
+    res.json({ ...contact.toObject(), id: contact._id.toString() });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/contacts/:id', async (req, res) => {
+  try {
+    const contact = await Contact.findByIdAndDelete(req.params.id);
+    if (!contact) return res.status(404).json({ error: 'Contact not found' });
+
+    await AuditLog.create({
+      user_name: req.query.user_name || 'User',
+      action: 'Delete Contact',
+      details: `Deleted contact ${contact.mobile_name} (${contact.mobile_number})`
+    });
+
+    res.json({ message: 'Contact deleted successfully' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Scan all contacts for duplicates
+app.get('/api/contacts-scan/duplicates', async (req, res) => {
+  try {
+    const filter = buildAssetUserFilter(req);
+    const contacts = await Contact.find(filter);
+
+    const phoneMap = new Map();
+    const emailMap = new Map();
+    const duplicateClusters = [];
+    const seenIds = new Set();
+
+    contacts.forEach((c) => {
+      const cleanPhone = (c.mobile_number || '').replace(/[\s\-\(\)\+]/g, '').slice(-10);
+      if (cleanPhone.length >= 7) {
+        if (!phoneMap.has(cleanPhone)) phoneMap.set(cleanPhone, []);
+        phoneMap.get(cleanPhone).push(c);
+      }
+
+      const cleanEmail = (c.mail_id || '').trim().toLowerCase();
+      if (cleanEmail && cleanEmail.includes('@')) {
+        if (!emailMap.has(cleanEmail)) emailMap.set(cleanEmail, []);
+        emailMap.get(cleanEmail).push(c);
+      }
+    });
+
+    // Collect phone duplicates
+    phoneMap.forEach((list, phone) => {
+      if (list.length > 1) {
+        const clusterIds = list.map((item) => item._id.toString()).sort().join('-');
+        if (!seenIds.has(clusterIds)) {
+          seenIds.add(clusterIds);
+          duplicateClusters.push({
+            reason: `Matching phone number: ${phone}`,
+            contacts: list.map((item) => ({ ...item.toObject(), id: item._id.toString() }))
+          });
+        }
+      }
+    });
+
+    // Collect email duplicates
+    emailMap.forEach((list, email) => {
+      if (list.length > 1) {
+        const clusterIds = list.map((item) => item._id.toString()).sort().join('-');
+        if (!seenIds.has(clusterIds)) {
+          seenIds.add(clusterIds);
+          duplicateClusters.push({
+            reason: `Matching email address: ${email}`,
+            contacts: list.map((item) => ({ ...item.toObject(), id: item._id.toString() }))
+          });
+        }
+      }
+    });
+
+    res.json(duplicateClusters);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Merge duplicate contacts and merge their context
+app.post('/api/contacts/merge', async (req, res) => {
+  try {
+    const { primaryContactId, duplicateContactIds, mergedData, user_name } = req.body;
+
+    if (!primaryContactId || !duplicateContactIds || duplicateContactIds.length === 0) {
+      return res.status(400).json({ error: 'Primary contact ID and duplicate contact IDs are required' });
+    }
+
+    const primary = await Contact.findById(primaryContactId);
+    if (!primary) return res.status(404).json({ error: 'Primary contact not found' });
+
+    const duplicates = await Contact.find({ _id: { $in: duplicateContactIds } });
+
+    // Combine context notes intelligently
+    let mergedContext = mergedData?.context_notes !== undefined ? mergedData.context_notes : (primary.context_notes || '');
+    duplicates.forEach((dup) => {
+      if (dup.context_notes && dup.context_notes.trim() && !mergedContext.includes(dup.context_notes.trim())) {
+        mergedContext += `\n[Merged from ${dup.mobile_name} (${new Date().toLocaleDateString()})]: ${dup.context_notes.trim()}`;
+      }
+    });
+
+    // Combine social IDs
+    const combinedSocial = {
+      linkedin: mergedData?.social_ids?.linkedin || primary.social_ids?.linkedin || '',
+      twitter: mergedData?.social_ids?.twitter || primary.social_ids?.twitter || '',
+      github: mergedData?.social_ids?.github || primary.social_ids?.github || '',
+      instagram: mergedData?.social_ids?.instagram || primary.social_ids?.instagram || '',
+      whatsapp: mergedData?.social_ids?.whatsapp || primary.social_ids?.whatsapp || '',
+      other: mergedData?.social_ids?.other || primary.social_ids?.other || ''
+    };
+
+    duplicates.forEach((dup) => {
+      ['linkedin', 'twitter', 'github', 'instagram', 'whatsapp', 'other'].forEach((k) => {
+        if (!combinedSocial[k] && dup.social_ids?.[k]) {
+          combinedSocial[k] = dup.social_ids[k];
+        }
+      });
+    });
+
+    // Secondary phone & secondary email
+    let secPhone = mergedData?.secondary_number || primary.secondary_number || '';
+    if (!secPhone) {
+      for (const dup of duplicates) {
+        if (dup.mobile_number && dup.mobile_number !== primary.mobile_number) {
+          secPhone = dup.mobile_number;
+          break;
+        }
+        if (dup.secondary_number && dup.secondary_number !== primary.mobile_number) {
+          secPhone = dup.secondary_number;
+          break;
+        }
+      }
+    }
+
+    let secEmail = mergedData?.secondary_email || primary.secondary_email || '';
+    if (!secEmail) {
+      for (const dup of duplicates) {
+        if (dup.mail_id && dup.mail_id !== primary.mail_id) {
+          secEmail = dup.mail_id;
+          break;
+        }
+        if (dup.secondary_email && dup.secondary_email !== primary.mail_id) {
+          secEmail = dup.secondary_email;
+          break;
+        }
+      }
+    }
+
+    // Apply merged updates to primary
+    primary.mobile_name = mergedData?.mobile_name || primary.mobile_name;
+    primary.mobile_number = mergedData?.mobile_number || primary.mobile_number;
+    primary.secondary_number = secPhone;
+    primary.mail_id = mergedData?.mail_id || primary.mail_id;
+    primary.secondary_email = secEmail;
+    primary.company = mergedData?.company || primary.company || duplicates.find((d) => d.company)?.company || '';
+    primary.job_title = mergedData?.job_title || primary.job_title || duplicates.find((d) => d.job_title)?.job_title || '';
+    primary.social_ids = combinedSocial;
+    primary.context_notes = mergedContext.trim();
+    primary.updatedAt = new Date();
+
+    await primary.save();
+
+    // Delete duplicates that were merged
+    await Contact.deleteMany({ _id: { $in: duplicateContactIds } });
+
+    await AuditLog.create({
+      user_name: user_name || 'User',
+      action: 'Merge Contacts & Context',
+      details: `Merged ${duplicates.length} duplicate contact(s) into primary contact: ${primary.mobile_name} (${primary.mobile_number})`
+    });
+
+    res.json({
+      success: true,
+      message: `Successfully merged into ${primary.mobile_name}`,
+      contact: { ...primary.toObject(), id: primary._id.toString() }
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Google Sync endpoint (sync contacts with Google Contacts metadata/API)
+app.post('/api/contacts/google-sync', async (req, res) => {
+  try {
+    const { contact_ids, user_name, sync_all } = req.body;
+    const filter = buildAssetUserFilter(req);
+
+    let targetQuery = filter;
+    if (!sync_all && Array.isArray(contact_ids) && contact_ids.length > 0) {
+      targetQuery._id = { $in: contact_ids.map((id) => new mongoose.Types.ObjectId(id)) };
+    }
+
+    const now = new Date();
+    const result = await Contact.updateMany(
+      targetQuery,
+      {
+        $set: {
+          google_synced: true,
+          last_synced_with_google: now
+        }
+      }
+    );
+
+    await AuditLog.create({
+      user_name: user_name || 'User',
+      action: 'Google Contacts Sync',
+      details: `Synchronized ${result.modifiedCount} contact(s) with Google Contacts`
+    });
+
+    res.json({
+      success: true,
+      synced_count: result.modifiedCount,
+      last_synced_at: now.toISOString(),
+      message: `Successfully synchronized ${result.modifiedCount} contact(s) with Google Contacts cloud context`
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Google Contacts Import endpoint (handles array of contacts and merges/adds)
+app.post('/api/contacts/google-import', async (req, res) => {
+  try {
+    const { contacts, user_id, user_email, user_name, workspace } = req.body;
+
+    if (!Array.isArray(contacts) || contacts.length === 0) {
+      return res.status(400).json({ error: 'No contacts provided for import' });
+    }
+
+    let addedCount = 0;
+    let mergedCount = 0;
+
+    for (const item of contacts) {
+      const name = item.mobile_name || item.name || 'Unnamed Contact';
+      const phone = item.mobile_number || item.phone || '';
+      const email = item.mail_id || item.email || '';
+
+      if (!phone && !email && !name) continue;
+
+      // Duplicate check
+      let existing = null;
+      if (phone) {
+        const cleanPhone = phone.replace(/[\s\-\(\)\+]/g, '').slice(-10);
+        if (cleanPhone.length >= 7) {
+          existing = await Contact.findOne({
+            $or: [
+              { mobile_number: new RegExp(cleanPhone, 'i') },
+              { secondary_number: new RegExp(cleanPhone, 'i') }
+            ]
+          });
+        }
+      }
+      if (!existing && email) {
+        existing = await Contact.findOne({
+          $or: [
+            { mail_id: new RegExp(`^${email.trim()}$`, 'i') },
+            { secondary_email: new RegExp(`^${email.trim()}$`, 'i') }
+          ]
+        });
+      }
+
+      if (existing) {
+        // Merge Google info into existing
+        if (!existing.secondary_number && phone && phone !== existing.mobile_number) {
+          existing.secondary_number = phone;
+        }
+        if (!existing.secondary_email && email && email !== existing.mail_id) {
+          existing.secondary_email = email;
+        }
+        if (item.company && !existing.company) existing.company = item.company;
+        if (item.notes && !existing.context_notes.includes(item.notes)) {
+          existing.context_notes += `\n[Google Sync]: ${item.notes}`;
+        }
+        existing.google_synced = true;
+        existing.last_synced_with_google = new Date();
+        await existing.save();
+        mergedCount++;
+      } else {
+        await Contact.create({
+          mobile_name: name,
+          mobile_number: phone || 'N/A',
+          mail_id: email || '',
+          company: item.company || '',
+          job_title: item.job_title || '',
+          context_notes: item.notes || 'Imported from Google Contacts',
+          google_synced: true,
+          last_synced_with_google: new Date(),
+          workspace: workspace || 'Personal',
+          user_id: user_id && mongoose.Types.ObjectId.isValid(user_id) ? user_id : undefined,
+          user_email: user_email || ''
+        });
+        addedCount++;
+      }
+    }
+
+    await AuditLog.create({
+      user_name: user_name || 'User',
+      action: 'Google Contacts Import',
+      details: `Imported ${addedCount} new contact(s), merged ${mergedCount} existing contact(s) from Google Contacts`
+    });
+
+    res.json({
+      success: true,
+      added: addedCount,
+      merged: mergedCount,
+      message: `Successfully processed Google Contacts: ${addedCount} created, ${mergedCount} merged`
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
