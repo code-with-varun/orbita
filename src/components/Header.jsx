@@ -12,7 +12,10 @@ import {
   UserCheck,
   ShieldCheck,
   Pause,
-  Play
+  Play,
+  Settings,
+  FileSpreadsheet,
+  KeyRound
 } from 'lucide-react';
 
 function LiveTimerBadge({ runningTask, onStopTimer, onPauseTimer, onResumeTimer }) {
@@ -117,7 +120,8 @@ export default function Header({
   setSearchTerm,
   workspaceFilter,
   setWorkspaceFilter,
-  onResetDatabase
+  onResetDatabase,
+  onOpenProfileSettings
 }) {
   const [showUserDropdown, setShowUserDropdown] = useState(false);
   const userDropdownRef = useRef(null);
@@ -269,32 +273,74 @@ export default function Header({
                   position: 'absolute',
                   top: '120%',
                   right: 0,
-                  width: '210px',
+                  width: '240px',
                   background: 'var(--bg-card)',
                   border: '1px solid var(--border-color)',
                   borderRadius: 'var(--radius-sm)',
-                  boxShadow: '0 10px 25px rgba(0,0,0,0.2)',
+                  boxShadow: '0 10px 25px rgba(0,0,0,0.25)',
                   padding: '0.65rem',
                   zIndex: 200
                 }}
               >
-                <div style={{ padding: '0.4rem 0.2rem 0.6rem', borderBottom: '1px solid var(--border-color)', marginBottom: '0.4rem' }}>
+                <div style={{ padding: '0.4rem 0.3rem 0.6rem', borderBottom: '1px solid var(--border-color)', marginBottom: '0.4rem' }}>
                   <div style={{ fontWeight: '700', fontSize: '0.85rem', color: 'var(--text-main)' }}>{currentUser.name}</div>
-                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{currentUser.email}</div>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{currentUser.email}</div>
                   <span className={`badge ${isSuperadmin ? 'badge-priority-critical' : 'badge-priority-medium'}`} style={{ marginTop: '0.4rem', fontSize: '0.65rem' }}>
                     {currentUser.role || 'Member'}
                   </span>
                 </div>
-                <button
-                  className="btn btn-danger"
-                  style={{ width: '100%', padding: '0.4rem 0.6rem', fontSize: '0.8rem', justifyContent: 'center' }}
-                  onClick={() => {
-                    setShowUserDropdown(false);
-                    onLogout();
-                  }}
-                >
-                  <LogOut size={13} /> Sign Out
-                </button>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem', marginBottom: '0.4rem' }}>
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    style={{ width: '100%', padding: '0.45rem 0.6rem', fontSize: '0.8rem', justifyContent: 'flex-start', border: 'none' }}
+                    onClick={() => {
+                      setShowUserDropdown(false);
+                      if (onOpenProfileSettings) onOpenProfileSettings('profile');
+                    }}
+                  >
+                    <Settings size={14} color="var(--accent-blue)" /> Profile & Settings
+                  </button>
+
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    style={{ width: '100%', padding: '0.45rem 0.6rem', fontSize: '0.8rem', justifyContent: 'flex-start', border: 'none', color: 'var(--accent-green)' }}
+                    onClick={() => {
+                      setShowUserDropdown(false);
+                      if (onOpenProfileSettings) onOpenProfileSettings('export');
+                    }}
+                  >
+                    <FileSpreadsheet size={14} /> Export My Data (.xlsx)
+                  </button>
+
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    style={{ width: '100%', padding: '0.45rem 0.6rem', fontSize: '0.8rem', justifyContent: 'flex-start', border: 'none', color: 'var(--accent-amber)' }}
+                    onClick={() => {
+                      setShowUserDropdown(false);
+                      if (onOpenProfileSettings) onOpenProfileSettings('password');
+                    }}
+                  >
+                    <KeyRound size={14} /> Reset Password
+                  </button>
+                </div>
+
+                <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '0.4rem' }}>
+                  <button
+                    type="button"
+                    className="btn btn-danger"
+                    style={{ width: '100%', padding: '0.4rem 0.6rem', fontSize: '0.8rem', justifyContent: 'center' }}
+                    onClick={() => {
+                      setShowUserDropdown(false);
+                      onLogout();
+                    }}
+                  >
+                    <LogOut size={13} /> Sign Out
+                  </button>
+                </div>
               </div>
             )}
           </div>

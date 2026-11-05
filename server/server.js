@@ -21,6 +21,7 @@ import {
   decryptPassword,
   hashCyberFingerprint
 } from './cryptoUtils.js';
+import XLSX from 'xlsx';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -276,6 +277,519 @@ app.get('/api/auth/users', async (req, res) => {
     const users = await User.find({}, 'name email role createdAt').sort({ name: 1 });
     res.json(users);
   } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Password Reset / Change Endpoint
+app.post('/api/auth/reset-password', async (req, res) => {
+  try {
+    const { email, current_password, new_password } = req.body;
+    if (!email || !new_password) {
+      return res.status(400).json({ error: 'Email and new password are required' });
+    }
+
+    if (new_password.trim().length < 6) {
+      return res.status(400).json({ error: 'New password must be at least 6 characters long' });
+    }
+
+    const cleanEmail = email.toLowerCase().trim();
+    const user = await User.findOne({ email: cleanEmail });
+    if (!user) {
+      return res.status(404).json({ error: 'No account found with this email address' });
+    }
+
+    // If current_password is provided, verify it against existing password
+    if (current_password !== undefined && current_password !== null && current_password !== '') {
+      if (user.password_hash !== current_password.trim()) {
+        return res.status(401).json({ error: 'Current password does not match' });
+      }
+    }
+
+    user.password_hash = new_password.trim();
+    await user.save();
+
+    await AuditLog.create({
+      user_id: user._id,
+      user_email: user.email,
+      user_name: user.name,
+      action: 'Password Reset',
+      details: `Password was successfully updated for ${user.email}`
+    });
+
+    res.json({ message: 'Password has been successfully updated. You can now use your new password.' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/auth/change-password', async (req, res) => {
+  try {
+    const { user_id, email, current_password, new_password } = req.body;
+    if ((!user_id && !email) || !new_password) {
+      return res.status(400).json({ error: 'User identifier and new password are required' });
+    }
+
+    if (new_password.trim().length < 6) {
+      return res.status(400).json({ error: 'New password must be at least 6 characters long' });
+    }
+
+    let user = null;
+    if (user_id && mongoose.Types.ObjectId.isValid(user_id)) {
+      user = await User.findById(user_id);
+    }
+    if (!user && email) {
+      user = await User.findOne({ email: email.toLowerCase().trim() });
+    }
+
+    if (!user) {
+      return res.status(404).json({ error: 'User account not found' });
+    }
+
+    if (current_password !== undefined && current_password !== null && current_password !== '') {
+      if (user.password_hash !== current_password.trim()) {
+        return res.status(401).json({ error: 'Current password does not match' });
+      }
+    }
+
+    user.password_hash = new_password.trim();
+    await user.save();
+
+    await AuditLog.create({
+      user_id: user._id,
+      user_email: user.email,
+      user_name: user.name,
+      action: 'Password Change',
+      details: `Password changed for user ${user.name} (${user.email})`
+    });
+
+    res.json({ message: 'Password changed successfully' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Helper to construct user-specific filter for exports across all tables
+function getExportFilter(req) {
+  const { user_id, user_email, user_role, user_name, scope } = req.query;
+
+  // Superadmin global dump if scope=all
+  if (user_role === 'Superadmin' && scope === 'all') {
+    return {};
+  }
+
+  const conditions = [];
+  if (user_id && user_id !== 'undefined' && user_id !== 'null' && user_id !== '') {
+    conditions.push({ user_id });
+    if (mongoose.Types.ObjectId.isValid(user_id)) {
+      conditions.push({ user_id: new mongoose.Types.ObjectId(user_id) });
+    }
+  }
+  if (user_email && user_email !== 'undefined' && user_email !== 'null' && user_email !== '') {
+    const cleanEmail = user_email.toLowerCase().trim();
+    conditions.push({ user_email: new RegExp(`^${cleanEmail}$`, 'i') });
+  }
+  if (user_name && user_name !== 'undefined' && user_name !== 'null' && user_name !== '') {
+    const cleanName = user_name.trim();
+    const nameRegex = new RegExp(`^${cleanName}$`, 'i');
+    conditions.push({ created_by: nameRegex });
+    conditions.push({ assignee: nameRegex });
+    conditions.push({ user_name: nameRegex });
+  }
+
+  if (conditions.length > 0) {
+    return { $or: conditions };
+  }
+  return {};
+}
+
+// -------------------------------------------------------------
+// USER DATA DUMP & EXCEL EXPORT (MULTI-SHEET WORKBOOK)
+// -------------------------------------------------------------
+
+// 1. Data summary API for Profile Settings preview
+app.get('/api/user/export-data', async (req, res) => {
+  try {
+    const filter = getExportFilter(req);
+    const { user_id, user_email, user_name, user_role } = req.query;
+
+    let userDoc = null;
+    if (user_id && mongoose.Types.ObjectId.isValid(user_id)) {
+      userDoc = await User.findById(user_id);
+    }
+    if (!userDoc && user_email) {
+      userDoc = await User.findOne({ email: user_email.toLowerCase().trim() });
+    }
+
+    const [
+      tasksCount,
+      routinesCount,
+      goalsCount,
+      projectsCount,
+      sessionsCount,
+      subscriptionsCount,
+      warrantiesCount,
+      credentialsCount,
+      contactsCount,
+      auditLogsCount
+    ] = await Promise.all([
+      Task.countDocuments({ ...filter, orbita_type: 'Task' }),
+      Task.countDocuments({ ...filter, orbita_type: 'Routine' }),
+      Task.countDocuments({ ...filter, orbita_type: 'Goal' }),
+      Task.countDocuments({ ...filter, orbita_type: 'Project' }),
+      TimeSession.countDocuments(filter),
+      Subscription.countDocuments(filter),
+      Warranty.countDocuments(filter),
+      Credential.countDocuments(filter),
+      Contact.countDocuments(filter),
+      AuditLog.countDocuments(filter)
+    ]);
+
+    res.json({
+      user: {
+        id: userDoc?._id || user_id,
+        name: userDoc?.name || user_name,
+        email: userDoc?.email || user_email,
+        role: userDoc?.role || user_role || 'Member',
+        createdAt: userDoc?.createdAt || null
+      },
+      counts: {
+        tasks: tasksCount,
+        routines: routinesCount,
+        goals: goalsCount,
+        projects: projectsCount,
+        total_work_items: tasksCount + routinesCount + goalsCount + projectsCount,
+        focus_sessions: sessionsCount,
+        subscriptions: subscriptionsCount,
+        warranties: warrantiesCount,
+        credentials: credentialsCount,
+        contacts: contactsCount,
+        audit_logs: auditLogsCount
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Helper function to auto-format worksheet column widths
+function createWorksheetWithWidths(data) {
+  if (!data || data.length === 0) {
+    const ws = XLSX.utils.json_to_sheet([{ Status: 'No records found for current user' }]);
+    ws['!cols'] = [{ wch: 45 }];
+    return ws;
+  }
+  const ws = XLSX.utils.json_to_sheet(data);
+  const keys = Object.keys(data[0]);
+  const colWidths = keys.map((key) => {
+    let maxLen = key.length;
+    for (let i = 0; i < Math.min(data.length, 300); i++) {
+      const val = data[i][key];
+      if (val !== null && val !== undefined) {
+        maxLen = Math.max(maxLen, String(val).length);
+      }
+    }
+    return { wch: Math.min(Math.max(maxLen + 3, 12), 60) };
+  });
+  ws['!cols'] = colWidths;
+  return ws;
+}
+
+// 2. Multi-Sheet Excel File Export Endpoint
+app.get('/api/user/export-excel', async (req, res) => {
+  try {
+    const filter = getExportFilter(req);
+    const { user_id, user_email, user_name, user_role } = req.query;
+
+    let userDoc = null;
+    if (user_id && mongoose.Types.ObjectId.isValid(user_id)) {
+      userDoc = await User.findById(user_id);
+    }
+    if (!userDoc && user_email) {
+      userDoc = await User.findOne({ email: user_email.toLowerCase().trim() });
+    }
+
+    // Parallel fetch across all tables
+    const [
+      tasks,
+      sessions,
+      subscriptions,
+      warranties,
+      credentials,
+      contacts,
+      auditLogs
+    ] = await Promise.all([
+      Task.find(filter).sort({ createdAt: -1 }),
+      TimeSession.find(filter).sort({ start_time: -1 }),
+      Subscription.find(filter).sort({ renewal_date: 1 }),
+      Warranty.find(filter).sort({ expiry_date: 1 }),
+      Credential.find(filter).sort({ site_or_app: 1 }),
+      Contact.find(filter).sort({ mobile_name: 1 }),
+      AuditLog.find(filter).sort({ createdAt: -1 }).limit(500)
+    ]);
+
+    // 1. Table 1: Profile Details Sheet
+    const profileData = [
+      {
+        'User ID': userDoc?._id ? userDoc._id.toString() : (user_id || 'N/A'),
+        'Full Name': userDoc?.name || user_name || 'User',
+        'Email Address': userDoc?.email || user_email || 'N/A',
+        'Role': userDoc?.role || user_role || 'Member',
+        'Account Created': userDoc?.createdAt ? new Date(userDoc.createdAt).toISOString().replace('T', ' ').substring(0, 19) : 'N/A',
+        'Export Timestamp': new Date().toISOString().replace('T', ' ').substring(0, 19),
+        'Exported By': 'Orbita Work Management Platform (Runit Infotech)'
+      }
+    ];
+
+    // 2. Table 2: Work Items (Tasks, Routines, Goals, Projects)
+    const tasksData = tasks.map((t) => ({
+      'Ticket Key': t.ticket_key,
+      'Work Item Type': t.orbita_type,
+      'Workspace': t.workspace || 'Personal',
+      'Title': t.title,
+      'Description': t.description || '',
+      'Status': t.status,
+      'Priority': t.priority,
+      'Priority Quadrant': t.priority_quadrant,
+      'Assignee': t.assignee || 'Unassigned',
+      'Scheduled Date': t.scheduled_date || '',
+      'Due Date': t.due_date || '',
+      'Completed Date': t.completed_at ? new Date(t.completed_at).toISOString().replace('T', ' ').substring(0, 19) : '',
+      'Target Hours': t.target_hours || 0,
+      'Estimated Hours': t.estimated_hours || 0,
+      'Actual Hours Logged': t.actual_hours || 0,
+      'Recurrence Type': t.recurrence_type || 'None',
+      'Recurrence Interval': t.recurrence_interval || 1,
+      'Recurrence Day': t.recurrence_day || '',
+      'Starred': t.is_starred ? 'Yes' : 'No',
+      'Tags': t.tags || '',
+      'Notes': t.notes || '',
+      'Created By': t.created_by || '',
+      'Created Date': t.createdAt ? new Date(t.createdAt).toISOString().replace('T', ' ').substring(0, 19) : ''
+    }));
+
+    // 3. Table 3: Project Stages & Subtasks (Nested Project items)
+    const projectStagesData = [];
+    tasks.filter((t) => t.orbita_type === 'Project' && Array.isArray(t.stages)).forEach((p) => {
+      p.stages.forEach((st, stIdx) => {
+        if (Array.isArray(st.tasks) && st.tasks.length > 0) {
+          st.tasks.forEach((subT, subIdx) => {
+            projectStagesData.push({
+              'Project Ticket': p.ticket_key,
+              'Project Title': p.title,
+              'Stage Order': stIdx + 1,
+              'Stage Title': st.title,
+              'Stage Completed': st.is_completed ? 'Yes' : 'No',
+              'Subtask Ticket': subT.ticket_key || `${p.ticket_key}-S${stIdx + 1}.${subIdx + 1}`,
+              'Subtask Title': subT.title,
+              'Subtask Assignee': subT.assignee || 'Unassigned',
+              'Subtask Status': subT.is_completed ? 'Completed' : 'Pending',
+              'Due Date': subT.due_date || '',
+              'Priority': subT.priority || 'High',
+              'Priority Quadrant': subT.priority_quadrant || 'Q2',
+              'Actual Hours': subT.actual_hours || 0,
+              'Completed At': subT.completed_at ? new Date(subT.completed_at).toISOString().replace('T', ' ').substring(0, 19) : ''
+            });
+          });
+        } else {
+          projectStagesData.push({
+            'Project Ticket': p.ticket_key,
+            'Project Title': p.title,
+            'Stage Order': stIdx + 1,
+            'Stage Title': st.title,
+            'Stage Completed': st.is_completed ? 'Yes' : 'No',
+            'Subtask Ticket': 'N/A',
+            'Subtask Title': '(Empty stage - No subtasks)',
+            'Subtask Assignee': '',
+            'Subtask Status': '',
+            'Due Date': '',
+            'Priority': '',
+            'Priority Quadrant': '',
+            'Actual Hours': 0,
+            'Completed At': ''
+          });
+        }
+      });
+    });
+
+    // 4. Table 4: Focus & Time Tracking Sessions
+    const sessionsData = sessions.map((s) => ({
+      'Ticket Key': s.ticket_key || '',
+      'Task Title': s.task_title || '',
+      'Type': s.orbita_type || 'Task',
+      'Workspace': s.workspace || 'Personal',
+      'Tags': s.tags || '',
+      'User Name': s.user_name || '',
+      'Start Time': s.start_time ? new Date(s.start_time).toISOString().replace('T', ' ').substring(0, 19) : '',
+      'End Time': s.end_time ? new Date(s.end_time).toISOString().replace('T', ' ').substring(0, 19) : 'In Progress',
+      'Duration (Seconds)': s.duration_seconds || 0,
+      'Duration (Hours)': s.duration_seconds ? Math.round((s.duration_seconds / 3600) * 100) / 100 : 0,
+      'Notes': s.notes || ''
+    }));
+
+    // 5. Table 5: Subscriptions
+    const subscriptionsData = subscriptions.map((sub) => ({
+      'Application / Service': sub.app_name,
+      'Website / URL': sub.site,
+      'Workspace': sub.workspace || 'Personal',
+      'Category': sub.category || 'SaaS / Tools',
+      'Cost': sub.cost,
+      'Currency': sub.currency || 'USD',
+      'Billing Cycle': sub.billing_cycle || 'Monthly',
+      'Status': sub.status,
+      'Auto Renew': sub.auto_renew ? 'Yes' : 'No',
+      'Start Date': sub.start_date || '',
+      'Renewal Date': sub.renewal_date || '',
+      'Expiry Date': sub.expiry_date || '',
+      'Payment Method': sub.payment_method || 'Credit Card',
+      'Past Billing Cycles Count': (sub.past_billing_cycles || []).length,
+      'Notes': sub.notes || '',
+      'Created Date': sub.createdAt ? new Date(sub.createdAt).toISOString().replace('T', ' ').substring(0, 19) : ''
+    }));
+
+    // 6. Table 6: Past Billing Cycles
+    const billingCyclesData = [];
+    subscriptions.forEach((sub) => {
+      if (Array.isArray(sub.past_billing_cycles) && sub.past_billing_cycles.length > 0) {
+        sub.past_billing_cycles.forEach((cycle) => {
+          billingCyclesData.push({
+            'Application / Service': sub.app_name,
+            'Cycle Date': cycle.cycle_date,
+            'Amount Paid': cycle.amount_paid || 0,
+            'Currency': cycle.currency || sub.currency || 'USD',
+            'Period Start': cycle.period_start || '',
+            'Period End': cycle.period_end || '',
+            'Payment Method': cycle.payment_method || sub.payment_method || 'Credit Card',
+            'Status': cycle.status || 'Paid',
+            'Invoice Number': cycle.invoice_number || '',
+            'Cycle Notes': cycle.notes || '',
+            'Recorded At': cycle.createdAt ? new Date(cycle.createdAt).toISOString().replace('T', ' ').substring(0, 19) : ''
+          });
+        });
+      }
+    });
+
+    // 7. Table 7: Product Warranties
+    const warrantiesData = warranties.map((w) => ({
+      'Product Name': w.product_name,
+      'Workspace': w.workspace || 'Personal',
+      'Category': w.category || 'Electronics',
+      'Cost Paid': w.cost_paid,
+      'Number of Warranties': w.number_of_warranties || 1,
+      'Condition': w.condition,
+      'Purchase Date': w.purchase_date || '',
+      'Expiry Date': w.expiry_date || '',
+      'Status': w.status,
+      'Warranty Provider': w.warranty_provider || '',
+      'Serial Number': w.serial_number || '',
+      'Invoice Number': w.invoice_number || '',
+      'Notes': w.notes || '',
+      'Created Date': w.createdAt ? new Date(w.createdAt).toISOString().replace('T', ' ').substring(0, 19) : ''
+    }));
+
+    // 8. Table 8: Credential Vault (With safely decrypted passwords for user recovery)
+    const credentialsData = credentials.map((c) => {
+      let plainPass = '';
+      try {
+        plainPass = decryptPassword(c.encrypted_password, c.password_iv, c.password_tag, c.cyber_code);
+      } catch (err) {
+        plainPass = '[Decryption Failed]';
+      }
+      return {
+        'Site or Application': c.site_or_app,
+        'Workspace': c.workspace || 'Personal',
+        'Category': c.category || 'General',
+        'URL / Login Link': c.url || '',
+        'Registered Email': c.registered_email || '',
+        'Username / User ID': c.user_id_name || '',
+        'Decrypted Password': plainPass,
+        'Cyber Code Fingerprint': c.cyber_code || '',
+        'MFA Tool': c.mfa_tool || 'None',
+        'MFA Configuration': c.mfa_details || '',
+        'Notes': c.notes || '',
+        'Created Date': c.createdAt ? new Date(c.createdAt).toISOString().replace('T', ' ').substring(0, 19) : ''
+      };
+    });
+
+    // 9. Table 9: Contact Directory
+    const contactsData = contacts.map((c) => ({
+      'Contact Name': c.mobile_name,
+      'Primary Phone Number': c.mobile_number,
+      'Secondary Phone': c.secondary_number || '',
+      'Primary Email': c.mail_id || '',
+      'Secondary Email': c.secondary_email || '',
+      'Company': c.company || '',
+      'Job Title': c.job_title || '',
+      'Workspace': c.workspace || 'Personal',
+      'LinkedIn': c.social_ids?.linkedin || '',
+      'Twitter / X': c.social_ids?.twitter || '',
+      'GitHub': c.social_ids?.github || '',
+      'Instagram': c.social_ids?.instagram || '',
+      'WhatsApp': c.social_ids?.whatsapp || '',
+      'Other Social': c.social_ids?.other || '',
+      'Tags': Array.isArray(c.tags) ? c.tags.join(', ') : '',
+      'Context Notes': c.context_notes || '',
+      'Google Synced': c.google_synced ? 'Yes' : 'No',
+      'Created Date': c.createdAt ? new Date(c.createdAt).toISOString().replace('T', ' ').substring(0, 19) : ''
+    }));
+
+    // 10. Table 10: Activity & Audit Logs
+    const auditLogsData = auditLogs.map((a) => ({
+      'Timestamp': a.createdAt ? new Date(a.createdAt).toISOString().replace('T', ' ').substring(0, 19) : '',
+      'Action': a.action,
+      'User Name': a.user_name || '',
+      'Ticket Key': a.ticket_key || '',
+      'Item Title': a.task_title || '',
+      'Workspace': a.workspace || '',
+      'Details': a.details || ''
+    }));
+
+    // Build Excel Workbook
+    const wb = XLSX.utils.book_new();
+
+    const sheetsToAppend = [
+      { name: 'Profile Details', data: profileData },
+      { name: 'Work Items (Tasks)', data: tasksData },
+      { name: 'Project Stages & Tasks', data: projectStagesData },
+      { name: 'Focus & Time Sessions', data: sessionsData },
+      { name: 'Subscriptions', data: subscriptionsData },
+      { name: 'Past Billing Cycles', data: billingCyclesData },
+      { name: 'Product Warranties', data: warrantiesData },
+      { name: 'Credential Vault', data: credentialsData },
+      { name: 'Contact Directory', data: contactsData },
+      { name: 'Activity & Audit Logs', data: auditLogsData }
+    ];
+
+    sheetsToAppend.forEach((sheet) => {
+      const ws = createWorksheetWithWidths(sheet.data);
+      // Sheet names in Excel cannot exceed 31 chars
+      const safeSheetName = sheet.name.substring(0, 31);
+      XLSX.utils.book_append_sheet(wb, ws, safeSheetName);
+    });
+
+    // Write binary buffer
+    const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+
+    // Sanitize user name for filename
+    const safeName = (userDoc?.name || user_name || 'User').replace(/[^a-zA-Z0-9_-]/g, '_');
+    const dateStr = new Date().toISOString().split('T')[0];
+    const filename = `Orbita_UserData_${safeName}_${dateStr}.xlsx`;
+
+    // Audit log this export
+    await AuditLog.create({
+      user_id: userDoc?._id,
+      user_email: userDoc?.email || user_email,
+      user_name: userDoc?.name || user_name || 'User',
+      action: 'Data Export (Excel)',
+      details: `User exported all personal data table-wise into an Excel sheet (${sheetsToAppend.length} tables/sheets).`
+    });
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Length', buffer.length);
+    res.send(buffer);
+  } catch (err) {
+    console.error('Error in export-excel endpoint:', err);
     res.status(500).json({ error: err.message });
   }
 });

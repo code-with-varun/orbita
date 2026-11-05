@@ -75,4 +75,50 @@ describe('Orbita MERN Work Platform - Cypress E2E Test Suite', () => {
     cy.get('input[placeholder*="Routine Title"]').type('Cypress Daily Recurring Routine');
     cy.contains('Create Routine').click();
   });
+
+  it('8. Profile Settings Menu & Multi-Sheet Excel Data Export', () => {
+    cy.contains('Sign In').click();
+    cy.get('input[type="email"]').type('superadmin@orbita.com');
+    cy.get('input[type="password"]').type('superadmin123');
+    cy.get('button[type="submit"]').contains('Sign In').click();
+
+    // Click profile badge in header to open profile settings menu
+    cy.get('.user-badge-header').click();
+    cy.contains('Profile & Settings').should('be.visible');
+    cy.contains('Export My Data (.xlsx)').should('be.visible');
+    cy.contains('Reset Password').should('be.visible');
+
+    // Open Profile Settings Modal
+    cy.contains('Profile & Settings').click();
+    cy.contains('Profile & Settings').should('be.visible');
+    cy.contains('Account Information').should('be.visible');
+
+    // Switch to Export tab
+    cy.contains('button', 'Export Data (Excel)').click();
+    cy.contains('Complete Excel Sheet Data Dump').should('be.visible');
+    cy.contains('Work Items (Tasks)').should('be.visible');
+    cy.contains('Focus & Time Sessions').should('be.visible');
+    cy.contains('Credential Vault').should('be.visible');
+    cy.contains('Export All Data Table-Wise (.xlsx)').should('be.visible');
+  });
+
+  it('9. Password Reset Feature in Profile Settings & Auth Modal', () => {
+    // 9a: Check Forgot Password link on Auth Modal
+    cy.contains('Sign In').click();
+    cy.contains('Forgot Password?').click();
+    cy.contains('Reset Account Password').should('be.visible');
+    cy.contains('Back to Sign In').click();
+    cy.contains('Welcome Back').should('be.visible');
+
+    // 9b: Check Password Reset in Profile Settings
+    cy.get('input[type="email"]').type('superadmin@orbita.com');
+    cy.get('input[type="password"]').type('superadmin123');
+    cy.get('button[type="submit"]').contains('Sign In').click();
+
+    cy.get('.user-badge-header').click();
+    cy.contains('Reset Password').click();
+    cy.contains('Reset or Change Password').should('be.visible');
+    cy.get('input[placeholder*="new strong password"]').should('be.visible');
+    cy.get('input[placeholder*="Re-enter new password"]').should('be.visible');
+  });
 });

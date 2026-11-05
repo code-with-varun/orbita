@@ -19,6 +19,7 @@ import ContactManagerView from './components/ContactManagerView';
 import TaskFormModal from './components/TaskFormModal';
 import TaskDetailModal from './components/TaskDetailModal';
 import AuthModal from './components/AuthModal';
+import ProfileSettingsModal from './components/ProfileSettingsModal';
 import ToastNotification from './components/ToastNotification';
 import LandingPage from './components/LandingPage';
 
@@ -44,6 +45,8 @@ export default function App() {
   // Modals
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [profileModalInitialTab, setProfileModalInitialTab] = useState('profile');
   const [authInitialRegister, setAuthInitialRegister] = useState(false);
   const [selectedTaskId, setSelectedTaskId] = useState(null);
   const [defaultScheduledDate, setDefaultScheduledDate] = useState('');
@@ -86,6 +89,11 @@ export default function App() {
     setCurrentUser(null);
     localStorage.removeItem('orbita_user');
     showToast('Signed out', 'info');
+  };
+
+  const handleOpenProfileSettings = (tab = 'profile') => {
+    setProfileModalInitialTab(tab);
+    setIsProfileModalOpen(true);
   };
 
   const fetchStats = () => {
@@ -334,6 +342,7 @@ export default function App() {
           workspaceFilter={workspaceFilter}
           setWorkspaceFilter={setWorkspaceFilter}
           onResetDatabase={handleResetDatabase}
+          onOpenProfileSettings={handleOpenProfileSettings}
         />
 
         {activeView === 'dashboard' && (
@@ -547,6 +556,14 @@ export default function App() {
         onStopTimer={handleStopTimer}
         runningTask={runningTask}
         currentUser={currentUser}
+      />
+
+      <ProfileSettingsModal
+        isOpen={isProfileModalOpen}
+        initialTab={profileModalInitialTab}
+        onClose={() => setIsProfileModalOpen(false)}
+        currentUser={currentUser}
+        onShowToast={showToast}
       />
 
       <ToastNotification toast={toast} onClose={() => setToast(null)} />
