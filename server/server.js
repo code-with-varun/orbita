@@ -36,6 +36,17 @@ app.use(express.json());
 // Connect to MongoDB Atlas
 await connectDb();
 
+app.get('/', (req, res) => {
+  res.json({
+    status: 'ok',
+    app: 'Orbita API',
+    version: '2.0.0',
+    message: 'Orbita API Server Running',
+    export_endpoint: '/api/user/export-excel',
+    reset_password_endpoint: '/api/auth/reset-password'
+  });
+});
+
 // -------------------------------------------------------------
 // SUPERADMIN COMMAND CENTER & GOVERNANCE
 // -------------------------------------------------------------
