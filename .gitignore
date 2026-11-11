@@ -1,37 +1,121 @@
-# Dependencies
+# ==============================================================================
+# Orbita Work Management Platform - Comprehensive .gitignore
+# Covers: Planning, Development, Testing, and Release lifecycles
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# 1. Dependencies & Package Managers
+# ------------------------------------------------------------------------------
 node_modules/
+**/node_modules/
 /.pnp
 .pnp.js
+.yarn/cache
+.yarn/unplugged
+.yarn/build-state.yml
+.yarn/install-state.gz
+.pnpm-store
 
-# Environment variables
+# ------------------------------------------------------------------------------
+# 2. Environment Variables & Sensitive Credentials
+# ------------------------------------------------------------------------------
 .env
 .env.local
 .env.development.local
 .env.test.local
 .env.production.local
 *.env
+**/.env
+**/*.env
+!*.env.example
+!**/*.env.example
 
-# SQLite legacy database files
-server/*.db
-server/*.sqlite
-server/*.sqlite3
-*.db
-
-# Build outputs
+# ------------------------------------------------------------------------------
+# 3. Build & Distribution Outputs
+# ------------------------------------------------------------------------------
 dist/
 dist-ssr/
+development/dist/
+release/dist/
+**/dist/
+**/dist-ssr/
 *.local
+.cache/
+.parcel-cache/
+.turbo/
+.next/
+out/
 
-# Logs
+# ------------------------------------------------------------------------------
+# 4. Python Compilation & Caches (Testing and Scripts)
+# ------------------------------------------------------------------------------
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+env/
+venv/
+.venv/
+ENV/
+env.bak/
+venv.bak/
+
+# ------------------------------------------------------------------------------
+# 5. Testing & Cypress Artifacts
+# ------------------------------------------------------------------------------
+cypress/videos/
+cypress/screenshots/
+testing/cypress/videos/
+testing/cypress/screenshots/
+**/cypress/videos/
+**/cypress/screenshots/
+.nyc_output
+
+# ------------------------------------------------------------------------------
+# 6. Legacy & SQLite Database Files
+# ------------------------------------------------------------------------------
+*.db
+**/*.db
+*.sqlite
+**/*.sqlite
+*.sqlite3
+**/*.sqlite3
+
+# ------------------------------------------------------------------------------
+# 7. Logs & Runtime Debug Files
+# ------------------------------------------------------------------------------
+*.log
+**/*.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
-*.log
 
-# Editor and OS files
+# ------------------------------------------------------------------------------
+# 8. Editor & Operating System Metadata
+# ------------------------------------------------------------------------------
 .DS_Store
-.vscode/
-.idea/
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
 Thumbs.db
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?

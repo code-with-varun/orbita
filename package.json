@@ -3,12 +3,19 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
+  "workspaces": [
+    "development",
+    "testing"
+  ],
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview",
-    "server": "node server/server.js",
-    "start": "node server/server.js"
+    "dev": "npm --prefix development run dev",
+    "build": "npm --prefix development run build && node -e \"import('fs').then(fs => { if(!fs.existsSync('dist')) fs.mkdirSync('dist'); fs.cpSync('development/dist', 'dist', {recursive:true}); })\"",
+    "preview": "npm --prefix development run preview",
+    "server": "node development/server/server.js",
+    "start": "node development/server/server.js",
+    "test": "npm --prefix testing run test",
+    "cypress:run": "npm --prefix testing run cypress:run",
+    "cypress:open": "npm --prefix testing run cypress:open"
   },
   "dependencies": {
     "cors": "^2.8.5",
