@@ -22,3 +22,4 @@ This directory holds release artifacts, deployment descriptors, configuration te
 - **Frontend Hosting**: Vercel (Edge CDN, Single Page Application rewrite rules, auto-deploy from Git branch `main`).
 - **Backend API Hosting**: Render Web Service (Node.js runtime, auto-restart, regional deployment in Singapore).
 - **Database Engine**: MongoDB Atlas (Multi-cloud cluster with high availability and SSL encryption).
+

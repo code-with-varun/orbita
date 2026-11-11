@@ -35,3 +35,4 @@ This directory contains all initial project planning assets, Business Requiremen
 4. **Data Privacy & User Sovereignty**:
    - Table-wise Multi-Sheet Excel Export (`.xlsx`) dumping all logged-in user data into individual sheets.
    - Complete Password Reset workflow in profile settings and authentication screens.
+

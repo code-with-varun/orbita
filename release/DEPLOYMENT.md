@@ -65,3 +65,4 @@ This guide details how to deploy and maintain the **Orbita Work Management Platf
    - Add IP Access List: `0.0.0.0/0` (Allow Access from Anywhere) to permit connections from Render's dynamic IP range.
 4. Auto-Initialization:
    - On initial start, the server automatically provisions the default Superadmin account (`superadmin@orbita.com` / `superadmin123`).
+

@@ -62,3 +62,4 @@ Run the automated test runner to execute Cypress and generate a styled `.xlsx` t
 ```bash
 python testing/run_cypress_and_generate_excel.py
 ```
+
